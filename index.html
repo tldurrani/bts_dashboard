@@ -490,23 +490,22 @@ function isoToDeadline(iso){
   return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 }
 
-window.showBarTip=function(e, text){
+window.showBarTip=function(e,text){
   const t=document.getElementById('bar-tooltip');
   if(!t) return;
   t.textContent=text;
   t.style.display='block';
-  t.style.left=(e.clientX+12)+'px';
-  t.style.top=(e.clientY-32)+'px';
+  moveBarTip(e);
 };
 window.moveBarTip=function(e){
   const t=document.getElementById('bar-tooltip');
-  if(!t) return;
-  t.style.left=(e.clientX+12)+'px';
-  t.style.top=(e.clientY-32)+'px';
+  if(!t||t.style.display==='none') return;
+  t.style.left=(e.clientX+14)+'px';
+  t.style.top=(e.clientY-36)+'px';
 };
 window.hideBarTip=function(){
   const t=document.getElementById('bar-tooltip');
-  if(t) t.style.display='none';
+  if(t){ t.style.display='none'; t.textContent=''; }
 };
 
 async function init(){
@@ -1154,7 +1153,7 @@ function buildSwimlane(){
         <div class="sl-owner">${esc(r.owner)}</div>
         ${tks.length?`<div class="sl-tickets-mini">${mini}${more}</div>`:''}
       </div>
-      <div class="sl-track" onmouseenter="showBarTip(event,'${r.progress}% complete')" onmousemove="moveBarTip(event)" onmouseleave="hideBarTip()">
+      <div class="sl-track" data-pct="${r.progress}" onmouseenter="showBarTip(event,this.dataset.pct+'% complete')" onmousemove="moveBarTip(event)" onmouseleave="hideBarTip()">
         <div class="sl-track-bg"></div>
         <div class="sl-track-fill" style="width:${r.progress}%;background:${color};"></div>
         ${i===0?`<div class="sl-today" style="left:${tp}%"><div class="sl-today-lbl" style="left:${tp<60?'4px':'-40px'}">today</div></div>`:`<div class="sl-today" style="left:${tp}%"></div>`}
@@ -1303,5 +1302,6 @@ function renderJiraTab(){
 document.getElementById('auth-input').addEventListener('keydown',e=>{ if(e.key==='Enter') window.checkPassword(); });
 init();
 </script>
+<div id="bar-tooltip" class="sl-tooltip"></div>
 </body>
 </html>
