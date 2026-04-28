@@ -270,6 +270,25 @@ td{padding:10px 12px;vertical-align:top;color:var(--text);}
 .risk-high{border-color:#3d1f1f!important;color:#b85c5c!important;background:#200f0f!important;}
 .risk-critical{border-color:#6b1a1a!important;color:#ff6b6b!important;background:#2d0808!important;}
 
+
+/* table v2 - sort, filter, drag, edit state */
+.th-wrap{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;}
+.th-sort{font-size:10px;color:var(--text3);flex-shrink:0;}
+.th-sort.asc::after{content:'↑';}
+.th-sort.desc::after{content:'↓';}
+.th-filter{width:100%;margin-top:4px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 6px;font-size:11px;font-family:var(--font);}
+.th-filter:focus{outline:none;border-color:var(--accent);}
+.th-filter::placeholder{color:var(--text3);}
+th.sorted{border-bottom:2px solid var(--accent)!important;}
+.drag-handle{cursor:grab;color:var(--text3);font-size:14px;padding:0 4px;flex-shrink:0;}
+.drag-handle:active{cursor:grabbing;}
+tr.dragging{opacity:.4;}
+tr.drag-over td{border-top:2px solid var(--accent)!important;}
+.edit-banner{display:flex;align-items:center;justify-content:space-between;background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:6px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:var(--accent);}
+.edit-banner-btns{display:flex;gap:6px;}
+.ws-input{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 6px;font-size:12px;font-family:var(--font);width:100%;}
+.ws-input:focus{outline:none;border-color:var(--accent);}
+
 .loading{display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px;gap:10px;}
 .spinner{width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -437,6 +456,9 @@ const SEED = [
 ];
 
 let rows=[], isAdmin=false, activeView='highlevel', jiraCfg=null, app, db;
+let sortCol=null, sortDir='asc';
+let colFilters={workstream:'',activity:'',owner:'',status:'',risk:''};
+let pendingRows=null; // snapshot for cancel
 let donutFilter=null;
 let dashConfig={name:'BTS Readiness Dashboard', btsDate:'2026-08-01'};
 
@@ -994,6 +1016,7 @@ window.checkPassword=function(){
     document.getElementById('jira-cfg-btn').style.display='inline-flex';
     document.getElementById('vt-jira').style.display='inline-block';
     document.getElementById('dash-settings-btn').style.display='inline-flex';
+    snapshotRows();
     render();
   }else{ document.getElementById('auth-error').style.display='block'; document.getElementById('auth-input').value=''; document.getElementById('auth-input').focus(); }
 };
@@ -1006,6 +1029,7 @@ window.toggleAdminMode=function(){
     document.getElementById('jira-cfg-btn').style.display='none';
     document.getElementById('vt-jira').style.display='none';
     document.getElementById('dash-settings-btn').style.display='none';
+    pendingRows=null;
     if(activeView==='jira'){ activeView='highlevel'; document.querySelectorAll('.vt-btn').forEach((b,i)=>b.classList.toggle('active',i===0)); }
     render();
   }else{
@@ -1017,17 +1041,83 @@ window.toggleAdminMode=function(){
 window.closeOverlay=id=>document.getElementById(id).style.display='none';
 window.switchView=function(view,btn){ activeView=view; document.querySelectorAll('.vt-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); render(); };
 window.addRow=function(){ rows.push({id:'ws-'+Date.now(),order:rows.length+1,workstream:'New',wsBadge:'badge-prod',activity:'New activity',owner:'TBD',deadline:'Aug 1',status:'yellow',progress:0,path:'',next:'',tickets:[],risk:'medium'}); render(); };
+// snapshot rows before editing starts
+function snapshotRows(){ pendingRows=JSON.parse(JSON.stringify(rows)); }
+
+window.cancelChanges=function(){
+  if(pendingRows){ rows=pendingRows; pendingRows=null; }
+  renderDetailed();
+};
+
 window.saveChanges=async function(){
   document.querySelectorAll('#tbl-body tr[data-id]').forEach(tr=>{
     const row=rows.find(r=>r.id===tr.dataset.id); if(!row) return;
-    row.activity=tr.querySelector('[data-f="activity"]').value; row.owner=tr.querySelector('[data-f="owner"]').value;
-    const dlVal=tr.querySelector('[data-f="deadline"]').value;
-    row.deadline=dlVal?isoToDeadline(dlVal):row.deadline; row.status=tr.querySelector('[data-f="status"]').value;
-    row.progress=parseInt(tr.querySelector('[data-f="progress"]').value)||0;
-    row.path=tr.querySelector('[data-f="path"]').value; row.next=tr.querySelector('[data-f="next"]').value;
+    row.workstream=tr.querySelector('[data-f="workstream"]')?.value||row.workstream;
+    // update badge based on workstream
+    const wsBadgeMap={'Engineering':'badge-eng','Product':'badge-prod','Marketing':'badge-mkt','CX':'badge-cx','Operations':'badge-ops'};
+    row.wsBadge=wsBadgeMap[row.workstream]||'badge-prod';
+    row.activity=tr.querySelector('[data-f="activity"]')?.value||row.activity;
+    row.owner=tr.querySelector('[data-f="owner"]')?.value||row.owner;
+    const dlVal=tr.querySelector('[data-f="deadline"]')?.value;
+    row.deadline=dlVal?isoToDeadline(dlVal):row.deadline;
+    row.status=tr.querySelector('[data-f="status"]')?.value||row.status;
+    row.risk=tr.querySelector('[data-f="risk"]')?.value||row.risk;
+    row.progress=parseInt(tr.querySelector('[data-f="progress"]')?.value)||0;
+    row.path=tr.querySelector('[data-f="path"]')?.value||row.path;
+    row.next=tr.querySelector('[data-f="next"]')?.value||row.next;
   });
+  pendingRows=null;
   await saveAll(); updateMetrics(); render();
 };
+
+window.setSort=function(col){
+  if(sortCol===col){ sortDir=sortDir==='asc'?'desc':'asc'; }
+  else{ sortCol=col; sortDir='asc'; }
+  renderDetailed();
+};
+
+window.setColFilter=function(col,val){
+  colFilters[col]=val;
+  renderDetailed();
+};
+
+/* ── DRAG AND DROP ── */
+let dragId=null;
+window.dragStart=function(e,id){
+  dragId=id;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move';
+};
+window.dragOver=function(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  e.currentTarget.classList.add('drag-over');
+};
+window.dragLeave=function(e){ e.currentTarget.classList.remove('drag-over'); };
+window.dragEnd=function(e){ e.currentTarget.classList.remove('dragging'); document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over')); };
+window.dragDrop=function(e,targetId){
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if(!dragId||dragId===targetId) return;
+  const fromIdx=rows.findIndex(r=>r.id===dragId);
+  const toIdx=rows.findIndex(r=>r.id===targetId);
+  if(fromIdx<0||toIdx<0) return;
+  const [moved]=rows.splice(fromIdx,1);
+  rows.splice(toIdx,0,moved);
+  rows.forEach((r,i)=>r.order=i+1);
+  dragId=null;
+  renderDetailed();
+};
+
+function initDrag(){
+  // make drag handle the actual drag trigger, not the whole row
+  document.querySelectorAll('.drag-handle').forEach(handle=>{
+    handle.addEventListener('mousedown',()=>{
+      const tr=handle.closest('tr');
+      if(tr) tr.setAttribute('draggable','true');
+    });
+  });
+}
 
 /* ── DETAIL DRAWER ── */
 window.showDetail=function(id){
@@ -1197,15 +1287,78 @@ function renderHighLevel(){
     </div>`;
 }
 
+function getFilteredSortedRows(){
+  let result=[...rows];
+  // apply column filters
+  if(colFilters.workstream) result=result.filter(r=>r.workstream.toLowerCase().includes(colFilters.workstream.toLowerCase()));
+  if(colFilters.activity) result=result.filter(r=>(r.activity||'').toLowerCase().includes(colFilters.activity.toLowerCase()));
+  if(colFilters.owner) result=result.filter(r=>(r.owner||'').toLowerCase().includes(colFilters.owner.toLowerCase()));
+  if(colFilters.status) result=result.filter(r=>r.status===colFilters.status);
+  if(colFilters.risk) result=result.filter(r=>(r.risk||'low')===colFilters.risk);
+  // apply sort
+  if(sortCol){
+    result.sort((a,b)=>{
+      let av=a[sortCol]||'', bv=b[sortCol]||'';
+      if(typeof av==='number') return sortDir==='asc'?av-bv:bv-av;
+      return sortDir==='asc'?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
+    });
+  }
+  return result;
+}
+
 function renderDetailed(){
   const sc={green:'g',yellow:'y',red:'r'}, sl={green:'On track',yellow:'At risk',red:'Blocked'};
-  const tbody=rows.map(r=>{
+  const displayRows=getFilteredSortedRows();
+
+  function thSort(col,label){
+    const active=sortCol===col;
+    const dir=active?sortDir:'';
+    return `<th class="${active?'sorted':''}" style="white-space:nowrap;">
+      <div class="th-wrap" onclick="setSort('${col}')">
+        <span>${label}</span>
+        <span class="th-sort ${dir}">${active?(sortDir==='asc'?'↑':'↓'):''}</span>
+      </div>
+      ${colFilters[col]!==undefined?`<input class="th-filter" placeholder="filter…" value="${esc(colFilters[col]||'')}" oninput="setColFilter('${col}',this.value)" onclick="event.stopPropagation()"/>`:''}
+    </th>`;
+  }
+
+  function thStatusFilter(){
+    return `<th class="${sortCol==='status'?'sorted':''}">
+      <div class="th-wrap" onclick="setSort('status')"><span>Status</span><span class="th-sort ${sortCol==='status'?sortDir:''}">${sortCol==='status'?(sortDir==='asc'?'↑':'↓'):''}</span></div>
+      <select class="th-filter" onchange="setColFilter('status',this.value)" onclick="event.stopPropagation()">
+        <option value="">all</option>
+        <option value="green" ${colFilters.status==='green'?'selected':''}>On track</option>
+        <option value="yellow" ${colFilters.status==='yellow'?'selected':''}>At risk</option>
+        <option value="red" ${colFilters.status==='red'?'selected':''}>Blocked</option>
+      </select>
+    </th>`;
+  }
+
+  function thRiskFilter(){
+    return `<th class="${sortCol==='risk'?'sorted':''}">
+      <div class="th-wrap" onclick="setSort('risk')"><span>Risk</span><span class="th-sort ${sortCol==='risk'?sortDir:''}">${sortCol==='risk'?(sortDir==='asc'?'↑':'↓'):''}</span></div>
+      <select class="th-filter" onchange="setColFilter('risk',this.value)" onclick="event.stopPropagation()">
+        <option value="">all</option>
+        <option value="low" ${colFilters.risk==='low'?'selected':''}>Low</option>
+        <option value="medium" ${colFilters.risk==='medium'?'selected':''}>Medium</option>
+        <option value="high" ${colFilters.risk==='high'?'selected':''}>High</option>
+        <option value="critical" ${colFilters.risk==='critical'?'selected':''}>Critical</option>
+      </select>
+    </th>`;
+  }
+
+  const tbody=displayRows.map(r=>{
     const tks=(r.tickets||[]);
-    const chips=tks.map(t=>`<a class="tbl-ticket" href="${t.url}" target="_blank">${t.key}</a>`).join('');
     const cells=isAdmin?`
+      <td style="cursor:grab;text-align:center;color:var(--text3);font-size:16px;" class="drag-handle" draggable="false">⠿</td>
+      <td>
+        <select class="ws-input" data-f="workstream" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 6px;font-size:12px;font-family:var(--font);">
+          ${['Engineering','Product','Marketing','CX','Operations',...new Set(rows.map(r=>r.workstream))].filter((v,i,a)=>a.indexOf(v)===i).map(w=>`<option value="${esc(w)}" ${r.workstream===w?'selected':''}>${esc(w)}</option>`).join('')}
+        </select>
+      </td>
       <td><input class="editable" data-f="activity" value="${esc(r.activity)}"/></td>
       <td><input class="editable" data-f="owner" value="${esc(r.owner)}"/></td>
-      <td><input class="editable" data-f="deadline" type="date" value="${deadlineToISO(r.deadline)}" style="width:130px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 6px;font-size:12px;font-family:var(--font);" onchange="this.dataset.changed='1'"/></td>
+      <td><input class="editable" data-f="deadline" type="date" value="${deadlineToISO(r.deadline)}" style="width:130px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 6px;font-size:12px;font-family:var(--font);"/></td>
       <td><select class="status-select ${sc[r.status]}" data-f="status" onchange="this.className='status-select '+{green:'g',yellow:'y',red:'r'}[this.value]">
         <option value="green" ${r.status==='green'?'selected':''}>On track</option>
         <option value="yellow" ${r.status==='yellow'?'selected':''}>At risk</option>
@@ -1222,21 +1375,16 @@ function renderDetailed(){
       <td><textarea class="editable" data-f="next" rows="2">${esc(r.next)}</textarea></td>
       <td>
         <div class="tbl-ticket-wrap" id="tbl-tks-${r.id}">
-          ${tks.map(t=>`
-            <div class="tbl-ticket-item">
-              <a href="${t.url}" target="_blank" onclick="event.stopPropagation()">${t.key}</a>
-              <button class="tbl-ticket-del" onclick="event.stopPropagation();removeTicket('${r.id}','${t.key}')" title="Remove">✕</button>
-            </div>`).join('')}
+          ${tks.map(t=>`<div class="tbl-ticket-item"><a href="${t.url}" target="_blank" onclick="event.stopPropagation()">${t.key}</a><button class="tbl-ticket-del" onclick="event.stopPropagation();removeTicket('${r.id}','${t.key}')" title="Remove">✕</button></div>`).join('')}
         </div>
         <div class="tk-search-wrap" onclick="event.stopPropagation()">
-          <input class="tbl-ticket-input" id="tbl-tk-inp-${r.id}" placeholder="Search or paste key…"
-            autocomplete="off"
-            oninput="ticketSearch('${r.id}',this.value)"
-            onkeydown="tkInputKey(event,'${r.id}')"/>
+          <input class="tbl-ticket-input" id="tbl-tk-inp-${r.id}" placeholder="Search or paste key…" autocomplete="off" oninput="ticketSearch('${r.id}',this.value)" onkeydown="tkInputKey(event,'${r.id}')"/>
           <div class="tk-dropdown" id="tbl-tk-dd-${r.id}"></div>
         </div>
       </td>
       <td><button class="del-btn" onclick="deleteRow('${r.id}')">✕</button></td>`:`
+      <td></td>
+      <td><span class="ws-badge ${r.wsBadge}">${esc(r.workstream)}</span></td>
       <td>${esc(r.activity)}</td>
       <td>${esc(r.owner)}</td>
       <td style="font-family:var(--mono);font-size:12px;white-space:nowrap;">${esc(r.deadline)}</td>
@@ -1245,21 +1393,52 @@ function renderDetailed(){
       <td style="font-family:var(--mono)">${r.progress}%</td>
       <td style="color:var(--text2);font-size:12px;">${esc(r.path)}</td>
       <td style="color:var(--text2);font-size:12px;">${esc(r.next)}</td>
-      <td>
-        <div class="tbl-ticket-wrap">
-          ${tks.length ? tks.map(t=>`<div class="tbl-ticket-item"><a href="${t.url}" target="_blank" onclick="event.stopPropagation()">${t.key}</a></div>`).join('') : '<span style="font-size:11px;color:var(--text3);">—</span>'}
-        </div>
-      </td>
+      <td><div class="tbl-ticket-wrap">${tks.length?tks.map(t=>`<div class="tbl-ticket-item"><a href="${t.url}" target="_blank" onclick="event.stopPropagation()">${t.key}</a></div>`).join(''):'<span style="font-size:11px;color:var(--text3);">—</span>'}</div></td>
       <td></td>`;
-    return `<tr data-id="${r.id}"><td><span class="ws-badge ${r.wsBadge}">${r.workstream}</span></td>${cells}</tr>`;
+    return `<tr data-id="${r.id}" draggable="${isAdmin?'true':'false'}"
+      ondragstart="dragStart(event,'${r.id}')"
+      ondragover="dragOver(event)"
+      ondrop="dragDrop(event,'${r.id}')"
+      ondragend="dragEnd(event)"
+      ondragleave="dragLeave(event)">
+      ${cells}
+    </tr>`;
   }).join('');
+
+  const hasFilters=Object.values(colFilters).some(v=>v);
+  const filterCount=displayRows.length;
+  const totalCount=rows.length;
+
   document.getElementById('main').innerHTML=`
+    ${isAdmin?`<div class="edit-banner">
+      <span>✏️ Edit mode — <strong>${filterCount}</strong>${hasFilters?' of '+totalCount:''} workstream${filterCount!==1?'s':''} shown. Drag rows to reorder.</span>
+      <div class="edit-banner-btns">
+        <button class="btn btn-ghost btn-sm" onclick="cancelChanges()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="saveChanges()">Save changes</button>
+      </div>
+    </div>`:''}
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Workstream</th><th>Activity</th><th>Owner</th><th>Deadline</th><th>Status</th><th>Risk</th><th>%</th><th>Path to green</th><th>Next steps</th><th>Jira tickets</th><th></th></tr></thead>
+      <thead><tr>
+        <th style="width:24px;"></th>
+        ${thSort('workstream','Workstream')}
+        ${thSort('activity','Activity')}
+        ${thSort('owner','Owner')}
+        <th>Deadline</th>
+        ${thStatusFilter()}
+        ${thRiskFilter()}
+        <th><div class="th-wrap" onclick="setSort('progress')"><span>%</span><span class="th-sort ${sortCol==='progress'?sortDir:''}">${sortCol==='progress'?(sortDir==='asc'?'↑':'↓'):''}</span></div></th>
+        <th>Path to green</th>
+        <th>Next steps</th>
+        <th>Jira tickets</th>
+        <th></th>
+      </tr></thead>
       <tbody id="tbl-body">${tbody}</tbody>
     </table></div>
-    ${isAdmin?`<button class="add-row-btn" onclick="addRow()">+ add workstream</button><div class="save-btn-wrap"><button class="btn btn-primary" onclick="saveChanges()">Save changes</button></div>`:''}
+    ${isAdmin?`<button class="add-row-btn" onclick="addRow()">+ add workstream</button>`:''}
     <div id="detail-drawer" class="detail" style="display:none;margin-top:20px;"></div>`;
+
+  // init drag and drop
+  initDrag();
 }
 
 function renderJiraTab(){
