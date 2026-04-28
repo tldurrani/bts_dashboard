@@ -458,14 +458,16 @@ window.saveDashSettings=async function(){
 
 function applyDashConfig(){
   const name=dashConfig.name||'BTS Readiness Dashboard';
-  const dateStr=dashConfig.btsDate||'2026-08-01';
   const d=getBTSDate();
   const formatted=d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  // update all references
+  // update title and name references
   const titleEl=document.getElementById('dash-title'); if(titleEl) titleEl.textContent=name;
   document.title=name;
   const footerEl=document.getElementById('footer-bts-txt'); if(footerEl) footerEl.textContent=`${name} · target ${formatted}`;
+  // update all date/countdown fields
   const dateEl=document.getElementById('m-bts-date'); if(dateEl) dateEl.textContent=formatted;
+  const daysEl=document.getElementById('m-days'); if(daysEl) daysEl.textContent=daysOut();
+  const weeksEl=document.getElementById('m-weeks'); if(weeksEl) weeksEl.textContent=weeksOut();
   updateTopbar();
 }
 
@@ -1023,7 +1025,7 @@ window.showDetail=function(id){
 function weeksOut(){ return Math.max(0,Math.ceil((getBTSDate()-new Date())/(1000*60*60*24*7))); }
 function daysOut(){  return Math.max(0,Math.ceil((getBTSDate()-new Date())/(1000*60*60*24))); }
 function stampSaved(msg){ const n=new Date(); document.getElementById('last-saved').textContent=(msg||'Saved')+' · '+n.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' at '+n.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); }
-function updateTopbar(){ const w=weeksOut(),c=document.getElementById('weeks-chip'); c.textContent=w+' weeks out'; if(w<=8) c.classList.add('urgent'); document.getElementById('date-chip').textContent=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+function updateTopbar(){ const w=weeksOut(),c=document.getElementById('weeks-chip'); c.textContent=w+' weeks out'; c.classList.toggle('urgent',w<=8); document.getElementById('date-chip').textContent=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
 function updateMetrics(){
   const g=rows.filter(r=>r.status==='green').length, y=rows.filter(r=>r.status==='yellow').length, r2=rows.filter(r=>r.status==='red').length;
   const avg=rows.length?Math.round(rows.reduce((a,r)=>a+r.progress,0)/rows.length):0;
