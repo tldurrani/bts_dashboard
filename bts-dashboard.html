@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BTS Readiness Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0e0f11;--bg2:#15171a;--bg3:#1c1f23;
+  --border:#2a2d32;--border2:#363a40;
+  --text:#e8eaed;--text2:#9aa0aa;--text3:#5a6170;
+  --green:#4a9660;--green-bg:#0f2318;--green-border:#1e4730;
+  --yellow:#c49a3c;--yellow-bg:#221a08;--yellow-border:#3d2f0e;
+  --red:#b85c5c;--red-bg:#200f0f;--red-border:#3d1f1f;
+  --accent:#4d8ef0;--accent-bg:#0d1e3a;--accent-border:#1a3a6e;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;}
+.app{min-height:100vh;display:flex;flex-direction:column;}
+
+/* topbar */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 28px;border-bottom:1px solid var(--border);gap:12px;flex-wrap:wrap;}
+.topbar-left{display:flex;align-items:center;gap:14px;}
+.logo{font-size:12px;font-weight:500;color:var(--text2);letter-spacing:.06em;text-transform:uppercase;}
+.divider-v{width:1px;height:18px;background:var(--border2);}
+.page-title{font-size:15px;font-weight:500;}
+.topbar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.chip{font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);}
+.chip.urgent{border-color:var(--red-border);color:var(--red);}
+.btn{padding:6px 14px;border-radius:6px;font-size:12px;font-family:var(--font);cursor:pointer;transition:all .15s;font-weight:500;}
+.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text2);}
+.btn-ghost:hover{border-color:var(--border);color:var(--text);background:var(--bg3);}
+.btn-primary{background:var(--accent);border:1px solid var(--accent);color:#fff;}
+.btn-primary:hover{background:#3a7de0;}
+.btn-danger{background:transparent;border:1px solid var(--red-border);color:var(--red);}
+.btn-danger:hover{background:var(--red-bg);}
+.btn-jira{background:var(--accent-bg);border:1px solid var(--accent-border);color:var(--accent);display:inline-flex;align-items:center;gap:5px;}
+.btn-jira:hover{background:#112244;}
+.btn-sm{padding:4px 10px;font-size:11px;}
+
+/* view toggle */
+.view-toggle{display:flex;border:1px solid var(--border2);border-radius:6px;overflow:hidden;}
+.vt-btn{padding:5px 14px;font-size:12px;font-weight:500;background:none;border:none;cursor:pointer;font-family:var(--font);color:var(--text3);transition:all .15s;}
+.vt-btn.active{background:var(--bg3);color:var(--text);}
+.vt-btn:hover:not(.active){color:var(--text2);}
+
+/* metrics */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:1px;border-bottom:1px solid var(--border);background:var(--border);}
+.mc{background:var(--bg);padding:14px 20px;}
+.mc-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
+.mc-val{font-size:24px;font-weight:300;font-family:var(--mono);}
+.mc-val.g{color:var(--green);}
+.mc-val.y{color:var(--yellow);}
+.mc-val.r{color:var(--red);}
+.mc-val.b{color:var(--accent);}
+.mc-sub{font-size:10px;color:var(--text3);margin-top:2px;}
+
+/* main */
+.main{flex:1;padding:28px;}
+
+/* high-level layout */
+.hl-grid{display:grid;grid-template-columns:1fr 280px;gap:24px;align-items:start;}
+@media(max-width:860px){.hl-grid{grid-template-columns:1fr;}}
+
+/* donut */
+.donut-seg{cursor:pointer;transition:stroke-width .15s,opacity .15s;}
+.donut-seg:hover{stroke-width:20px;}
+.donut-seg.active{stroke-width:22px;}
+.donut-seg.dimmed{opacity:.25;}
+.donut-leg-row{cursor:pointer;border-radius:4px;padding:3px 4px;margin:-3px -4px;transition:background .12s;}
+.donut-leg-row:hover{background:var(--bg3);}
+.donut-leg-row.active{background:var(--bg3);outline:1px solid var(--border2);}
+.donut-reset{font-size:10px;color:var(--accent);cursor:pointer;text-align:center;margin-top:6px;padding:3px;border-radius:4px;display:none;}
+.donut-reset:hover{background:var(--bg3);}
+.donut-reset.visible{display:block;}
+.donut-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;}
+.donut-title{font-size:12px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;}
+.donut-wrap{position:relative;width:160px;height:160px;margin:0 auto 16px;}
+.donut-wrap svg{transform:rotate(-90deg);}
+.donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.donut-pct{font-size:28px;font-weight:300;font-family:var(--mono);color:var(--text);}
+.donut-pct-label{font-size:10px;color:var(--text3);margin-top:1px;}
+.donut-legend{display:flex;flex-direction:column;gap:8px;}
+.donut-leg-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;}
+.donut-leg-left{display:flex;align-items:center;gap:7px;}
+.donut-leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.donut-leg-label{color:var(--text2);}
+.donut-leg-count{font-family:var(--mono);font-size:12px;color:var(--text);}
+.donut-divider{height:1px;background:var(--border);margin:10px 0;}
+
+/* swimlane */
+.swimlane-wrap{overflow-x:auto;}
+.sl-inner{min-width:560px;}
+.sl-month-row{display:flex;margin-left:172px;margin-bottom:4px;}
+.sl-month{font-size:10px;font-weight:500;color:var(--text3);text-align:center;letter-spacing:.04em;text-transform:uppercase;}
+.sl-row{display:flex;align-items:flex-start;margin-bottom:14px;cursor:pointer;}
+.sl-label{width:172px;flex-shrink:0;padding-right:16px;padding-top:6px;}
+.sl-name{font-size:13px;font-weight:500;line-height:1.3;}
+.sl-owner{font-size:11px;color:var(--text3);margin-top:1px;}
+.sl-tickets-mini{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;}
+.sl-tc{font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:3px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-border);text-decoration:none;}
+.sl-tc:hover{background:#112244;}
+.sl-track{flex:1;height:36px;position:relative;margin-top:6px;}
+.sl-track-bg{position:absolute;top:50%;transform:translateY(-50%);left:0;right:0;height:4px;background:var(--bg3);border-radius:2px;}
+.sl-track-fill{position:absolute;top:50%;transform:translateY(-50%);left:0;height:4px;border-radius:2px;transition:width .5s ease;}
+.sl-today{position:absolute;top:0;bottom:0;width:1px;background:var(--accent);opacity:.6;}
+.sl-today-lbl{position:absolute;top:2px;font-size:9px;color:var(--accent);transform:translateX(-50%);white-space:nowrap;font-family:var(--mono);}
+.sl-milestone{position:absolute;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;border:2px solid var(--bg);}
+.sl-dl-lbl{position:absolute;bottom:2px;font-size:9px;color:var(--text3);transform:translateX(-50%);white-space:nowrap;font-family:var(--mono);}
+.sl-pct{position:absolute;right:-32px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--text3);font-family:var(--mono);width:28px;text-align:right;}
+.sl-row:hover .sl-track-bg{background:var(--bg2);}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;font-size:11px;color:var(--text3);}
+.leg{display:flex;align-items:center;gap:5px;}
+.leg-dot{width:8px;height:8px;border-radius:50%;}
+.leg-line{width:14px;height:2px;background:var(--accent);opacity:.6;}
+
+/* detail drawer */
+.detail{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:20px 24px;margin-top:20px;}
+.detail-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.detail-title{font-size:15px;font-weight:500;}
+.detail-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;}
+.df-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;}
+.df-val{font-size:13px;}
+.df-full{grid-column:1/-1;}
+.close-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;line-height:1;padding:2px 6px;}
+.close-btn:hover{color:var(--text);}
+.tickets-section{margin-top:14px;border-top:1px solid var(--border);padding-top:14px;}
+.tickets-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;display:block;}
+.tickets-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.ticket-card{display:flex;align-items:center;gap:7px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;font-size:12px;}
+.ticket-key{font-family:var(--mono);color:var(--accent);font-size:11px;text-decoration:none;font-weight:500;white-space:nowrap;}
+.ticket-key:hover{text-decoration:underline;}
+.ticket-summary{color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ticket-sdot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.ticket-remove{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0 2px;margin-left:4px;}
+.ticket-remove:hover{color:var(--red);}
+.ticket-add-row{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;}
+.ticket-input{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:5px 10px;font-size:12px;font-family:var(--mono);width:120px;}
+.ticket-input:focus{outline:none;border-color:var(--accent);}
+.ticket-input::placeholder{color:var(--text3);}
+
+/* detailed table */
+.tbl-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead tr{border-bottom:1px solid var(--border2);}
+th{padding:8px 12px;font-size:10px;font-weight:500;color:var(--text3);text-align:left;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;}
+tbody tr{border-bottom:1px solid var(--border);}
+tbody tr:hover{background:var(--bg2);}
+td{padding:10px 12px;vertical-align:top;color:var(--text);}
+.ws-badge{display:inline-flex;align-items:center;font-size:11px;font-weight:500;padding:2px 8px;border-radius:4px;white-space:nowrap;}
+.badge-eng{background:#0d1f33;color:#5b9bd5;border:1px solid #1a3a5c;}
+.badge-prod{background:#1a1033;color:#9b8fd5;border:1px solid #312266;}
+.badge-mkt{background:#221a08;color:#c4963c;border:1px solid #3d2f0e;}
+.badge-cx{background:#0f2318;color:#4a9660;border:1px solid #1e4730;}
+.badge-ops{background:#200f0f;color:#b85c5c;border:1px solid #3d1f1f;}
+.status-pill{display:inline-block;border-radius:6px;padding:3px 8px;font-size:12px;}
+.status-select{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--font);cursor:pointer;}
+.g{border-color:var(--green-border)!important;color:var(--green)!important;background:var(--green-bg)!important;}
+.y{border-color:var(--yellow-border)!important;color:var(--yellow)!important;background:var(--yellow-bg)!important;}
+.r{border-color:var(--red-border)!important;color:var(--red)!important;background:var(--red-bg)!important;}
+.editable{background:transparent;border:1px solid transparent;border-radius:4px;padding:3px 6px;font-size:13px;color:var(--text);font-family:var(--font);width:100%;resize:none;}
+.editable:focus{outline:none;border-color:var(--border2);background:var(--bg3);}
+.progress-input{width:50px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 6px;font-size:12px;font-family:var(--mono);text-align:center;}
+.progress-input:focus{outline:none;border-color:var(--accent);}
+.add-row-btn{margin-top:12px;padding:8px 16px;background:transparent;border:1px dashed var(--border2);color:var(--text3);border-radius:6px;font-size:12px;font-family:var(--font);cursor:pointer;width:100%;}
+.add-row-btn:hover{border-color:var(--border);color:var(--text2);background:var(--bg2);}
+.del-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px;}
+.del-btn:hover{color:var(--red);background:var(--red-bg);}
+.save-btn-wrap{margin-top:14px;display:flex;gap:8px;align-items:center;}
+.tbl-tickets{display:flex;flex-wrap:wrap;gap:3px;}
+.tbl-ticket{font-size:10px;font-family:var(--mono);padding:1px 6px;border-radius:3px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-border);text-decoration:none;white-space:nowrap;}
+.tbl-ticket:hover{background:#112244;}
+
+/* jira tab */
+.jira-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px 20px;margin-bottom:14px;}
+.jira-card-title{font-size:13px;font-weight:500;margin-bottom:2px;}
+.jira-card-sub{font-size:11px;color:var(--text3);margin-bottom:10px;}
+
+/* overlays */
+.overlay{position:fixed;inset:0;background:rgba(14,15,17,.92);display:flex;align-items:center;justify-content:center;z-index:1000;backdrop-filter:blur(4px);}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:28px;width:460px;max-width:96vw;max-height:90vh;overflow-y:auto;}
+.modal-title{font-size:16px;font-weight:500;margin-bottom:6px;}
+.modal-sub{font-size:12px;color:var(--text3);margin-bottom:20px;line-height:1.6;}
+.modal-label{font-size:11px;color:var(--text2);margin-bottom:5px;margin-top:14px;display:flex;align-items:center;gap:8px;}
+.modal-input{width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:8px 12px;font-size:13px;font-family:var(--font);}
+.modal-input:focus{outline:none;border-color:var(--accent);}
+.modal-input::placeholder{color:var(--text3);}
+.modal-footer{display:flex;gap:8px;margin-top:20px;}
+.modal-error{font-size:12px;color:var(--red);margin-top:8px;display:none;}
+.modal-info{font-size:11px;color:var(--text3);margin-top:6px;line-height:1.6;background:var(--bg3);border-radius:6px;padding:8px 12px;}
+.mapping-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;}
+.mapping-row input{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:5px 10px;font-size:12px;font-family:var(--mono);}
+.mapping-row input:focus{outline:none;border-color:var(--accent);}
+.mapping-key{width:90px;}
+.mapping-ws{flex:1;}
+.mapping-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:2px 6px;}
+.mapping-del:hover{color:var(--red);}
+.sync-log{margin-top:10px;font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;display:none;max-height:150px;overflow-y:auto;}
+.sync-log.open{display:block;}
+.sync-line{margin-bottom:3px;}
+.sync-line.ok{color:var(--green);}
+.sync-line.err{color:var(--red);}
+.sync-line.info{color:var(--text3);}
+/* jira browser */
+.browser-overlay{position:fixed;inset:0;background:rgba(14,15,17,.95);display:flex;align-items:center;justify-content:center;z-index:1100;backdrop-filter:blur(4px);}
+.browser-modal{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;width:560px;max-width:97vw;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;}
+.browser-header{padding:18px 20px 14px;border-bottom:1px solid var(--border);}
+.browser-title{font-size:15px;font-weight:500;margin-bottom:10px;}
+.browser-search-row{display:flex;gap:8px;align-items:center;}
+.browser-search{flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:7px 12px;font-size:13px;font-family:var(--font);}
+.browser-search:focus{outline:none;border-color:var(--accent);}
+.browser-search::placeholder{color:var(--text3);}
+.browser-tabs{display:flex;gap:0;margin-top:10px;}
+.browser-tab{padding:5px 12px;font-size:11px;font-weight:500;background:none;border:none;cursor:pointer;font-family:var(--font);color:var(--text3);border-bottom:2px solid transparent;transition:all .12s;}
+.browser-tab.active{color:var(--text);border-bottom-color:var(--accent);}
+.browser-tab:hover:not(.active){color:var(--text2);}
+.browser-body{flex:1;overflow-y:auto;padding:12px 20px;}
+.browser-status{font-size:12px;color:var(--text3);padding:20px 0;text-align:center;}
+.browser-result{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:6px;cursor:pointer;transition:background .1s;}
+.browser-result:hover{background:var(--bg3);}
+.browser-result.mapped{opacity:.45;cursor:default;}
+.br-type{font-size:9px;font-weight:500;padding:2px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0;font-family:var(--mono);}
+.br-type.project{background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-border);}
+.br-type.epic{background:#2a1a3a;color:#b08ef0;border:1px solid #4a2d6e;}
+.br-type.label{background:#0f2318;color:#4a9660;border:1px solid #1e4730;}
+.br-key{font-family:var(--mono);font-size:11px;color:var(--text2);flex-shrink:0;min-width:60px;}
+.br-name{font-size:13px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.br-count{font-size:10px;color:var(--text3);font-family:var(--mono);flex-shrink:0;}
+.br-mapped-badge{font-size:10px;color:var(--green);flex-shrink:0;}
+.br-add{font-size:18px;color:var(--accent);flex-shrink:0;line-height:1;}
+.browser-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+.browser-ws-select{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--font);}
+.browser-ws-select:focus{outline:none;border-color:var(--accent);}
+.map-chip{display:inline-flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:3px 8px;font-size:11px;margin:2px;}
+.map-chip-type{font-size:9px;padding:1px 4px;border-radius:2px;font-family:var(--mono);}
+.map-chip-type.project{background:var(--accent-bg);color:var(--accent);}
+.map-chip-type.epic{background:#2a1a3a;color:#b08ef0;}
+.map-chip-type.label{background:#0f2318;color:#4a9660;}
+.map-chip-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0 1px;margin-left:2px;}
+.map-chip-del:hover{color:var(--red);}
+
+/* risk */
+.risk-select{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--font);cursor:pointer;}
+.risk-pill{display:inline-block;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:500;}
+.risk-low{border-color:#1e4730!important;color:#4a9660!important;background:#0f2318!important;}
+.risk-medium{border-color:#3d2f0e!important;color:#c49a3c!important;background:#221a08!important;}
+.risk-high{border-color:#3d1f1f!important;color:#b85c5c!important;background:#200f0f!important;}
+.risk-critical{border-color:#6b1a1a!important;color:#ff6b6b!important;background:#2d0808!important;}
+
+.loading{display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px;gap:10px;}
+.spinner{width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.footer{padding:10px 28px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+.footer-txt{font-size:11px;color:var(--text3);font-family:var(--mono);}
+</style>
+</head>
+<body>
+
+<!-- AUTH OVERLAY -->
+<div class="overlay" id="auth-overlay" style="display:none;">
+  <div class="modal" style="width:320px;">
+    <div class="modal-title">Admin access</div>
+    <div class="modal-sub">Enter the admin password to enable editing, Jira sync, and ticket linking.</div>
+    <div class="modal-error" id="auth-error">Incorrect password — try again.</div>
+    <input class="modal-input" type="password" id="auth-input" placeholder="Password" autocomplete="off"/>
+    <div class="modal-footer">
+      <button class="btn btn-primary" style="flex:1;" onclick="checkPassword()">Unlock</button>
+      <button class="btn btn-ghost" onclick="closeOverlay('auth-overlay')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- JIRA SETTINGS OVERLAY -->
+<div class="overlay" id="jira-overlay" style="display:none;">
+  <div class="modal">
+    <div class="modal-title">Jira settings</div>
+    <div class="modal-sub">Connect to <strong>riversideinsights.atlassian.net</strong>. Credentials are stored only in your browser.</div>
+    <div class="modal-label">Jira email</div>
+    <input class="modal-input" id="jira-email" placeholder="you@riversideinsights.com" type="email"/>
+    <div class="modal-label">API token <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" style="color:var(--accent);font-size:10px;">generate one ↗</a></div>
+    <input class="modal-input" id="jira-token" placeholder="Paste your Atlassian API token" type="password"/>
+    <div class="modal-label" style="margin-top:18px;display:flex;align-items:center;justify-content:space-between;">
+      <span>Mappings <span style="color:var(--text3);font-size:10px;">(project / epic / label → workstream)</span></span>
+      <button class="btn btn-jira btn-sm" onclick="openJiraBrowser()" id="browse-btn" style="display:none;">Browse Jira</button>
+    </div>
+    <div class="modal-info" style="margin-bottom:8px;">On sync, open tickets from each mapped source are pulled and attached to the matching workstream rows. <strong>Browse Jira</strong> lets you search projects, epics, and labels to find what to map.</div>
+    <div id="mapping-list" style="margin-top:6px;"></div>
+    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="addMapping()">+ add manually</button>
+    <div class="modal-error" id="jira-save-error"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="saveJiraSettings()">Save settings</button>
+      <button class="btn btn-ghost" onclick="closeOverlay('jira-overlay')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- JIRA BROWSER OVERLAY -->
+<div class="browser-overlay" id="jira-browser" style="display:none;">
+  <div class="browser-modal">
+    <div class="browser-header">
+      <div class="browser-title">Browse Jira — search projects, epics, labels</div>
+      <div class="browser-search-row">
+        <input class="browser-search" id="browser-search" placeholder="Type to search…" oninput="browserSearch(this.value)" autocomplete="off"/>
+        <button class="btn btn-ghost btn-sm" onclick="closeBrowser()">Done</button>
+      </div>
+      <div class="browser-tabs">
+        <button class="browser-tab active" onclick="setBrowserTab('all',this)">All</button>
+        <button class="browser-tab" onclick="setBrowserTab('project',this)">Projects</button>
+        <button class="browser-tab" onclick="setBrowserTab('epic',this)">Epics</button>
+        <button class="browser-tab" onclick="setBrowserTab('label',this)">Labels</button>
+      </div>
+    </div>
+    <div class="browser-body" id="browser-body">
+      <div class="browser-status">Enter your email and API token first, then click Browse Jira.</div>
+    </div>
+    <div class="browser-footer">
+      <span style="font-size:11px;color:var(--text3);">Map to workstream:</span>
+      <select class="browser-ws-select" id="browser-ws-select"></select>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="logo">Riverside Insights</span>
+      <div class="divider-v"></div>
+      <span class="page-title">BTS Readiness Dashboard</span>
+    </div>
+    <div class="topbar-right">
+      <span class="chip" id="weeks-chip">— weeks out</span>
+      <span class="chip" id="date-chip">—</span>
+      <div class="view-toggle">
+        <button class="vt-btn active" id="vt-hl" onclick="switchView('highlevel',this)">High-level</button>
+        <button class="vt-btn" id="vt-dt" onclick="switchView('detailed',this)">Detailed</button>
+        <button class="vt-btn" id="vt-jira" onclick="switchView('jira',this)" style="display:none;">Jira</button>
+      </div>
+      <button class="btn btn-jira btn-sm" id="jira-sync-btn" onclick="handleJiraSync()" style="display:none;">Sync Jira</button>
+      <button class="btn btn-ghost btn-sm" id="jira-cfg-btn" onclick="openJiraSettings()" style="display:none;">Jira settings</button>
+      <button class="btn btn-ghost btn-sm" id="admin-btn" onclick="toggleAdminMode()">Admin</button>
+    </div>
+  </div>
+
+  <!-- METRICS -->
+  <div class="metrics">
+    <div class="mc"><div class="mc-label">Days to BTS</div><div class="mc-val" id="m-days">—</div><div class="mc-sub">Aug 1, 2026</div></div>
+    <div class="mc"><div class="mc-label">Weeks out</div><div class="mc-val b" id="m-weeks">—</div></div>
+    <div class="mc"><div class="mc-label">Readiness avg</div><div class="mc-val" id="m-avg">—</div><div class="mc-sub">across workstreams</div></div>
+    <div class="mc"><div class="mc-label">On track</div><div class="mc-val g" id="m-g">—</div></div>
+    <div class="mc"><div class="mc-label">At risk</div><div class="mc-val y" id="m-y">—</div></div>
+    <div class="mc"><div class="mc-label">Blocked</div><div class="mc-val r" id="m-r">—</div></div>
+    <div class="mc"><div class="mc-label">Jira tickets</div><div class="mc-val b" id="m-tickets">—</div><div class="mc-sub">linked</div></div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main" id="main">
+    <div class="loading"><div class="spinner"></div>Loading dashboard...</div>
+  </div>
+
+  <div class="footer">
+    <span class="footer-txt" id="last-saved">—</span>
+    <span class="footer-txt">BTS opens Aug 1, 2026 · Monday Program Meeting · Biweekly DM Steering Committee</span>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+/* ── CONFIG ── */
+const firebaseConfig = {
+  apiKey:            "AIzaSyBt7mkWUsJVTsOahXh7clc26N4BpdFey6c",
+  authDomain:        "soundtrack-showdown.firebaseapp.com",
+  databaseURL:       "https://soundtrack-showdown-default-rtdb.firebaseio.com",
+  projectId:         "soundtrack-showdown",
+  storageBucket:     "soundtrack-showdown.firebasestorage.app",
+  messagingSenderId: "1087389697784",
+  appId:             "1:1087389697784:web:ef792c2c4c721a882ddd0d",
+  measurementId:     "G-2Y4JV3250F"
+};
+const ADMIN_PASSWORD = "bts2025";
+const BTS_DATE       = new Date(2026, 7, 1);  // August 1 2026
+const JIRA_BASE      = "https://riversidejira.atlassian.net";
+
+const SEED = [
+  {id:'ws-01',order:1,workstream:'Engineering',wsBadge:'badge-eng',activity:'Performance optimization & bug fixes',owner:'Eng Lead',deadline:'Jul 11',status:'yellow',progress:45,path:'Complete perf audit; resolve top 3 P1s',next:'Kick off perf audit sprint Mon',tickets:[],risk:'medium'},
+  {id:'ws-02',order:2,workstream:'Engineering',wsBadge:'badge-eng',activity:'Load testing — staging',owner:'QA / Eng',deadline:'Jul 18',status:'red',progress:15,path:'Stand up staging load-test pipeline; define pass thresholds',next:'Schedule infra review with DevOps this week',tickets:[],risk:'critical'},
+  {id:'ws-03',order:3,workstream:'Engineering',wsBadge:'badge-eng',activity:'Load testing — production',owner:'Eng Lead',deadline:'Jul 25',status:'red',progress:10,path:'Run full-scale test after staging passes',next:'Depends on staging test completion',tickets:[],risk:'critical'},
+  {id:'ws-04',order:4,workstream:'Engineering',wsBadge:'badge-eng',activity:'SSO & rostering (Clever, ClassLink, Google, Microsoft)',owner:'Platform PM',deadline:'Jul 18',status:'yellow',progress:55,path:'Complete cert renewals; validate all four IDP flows',next:'Audit expiry dates on Clever & ClassLink certs',tickets:[],risk:'high'},
+  {id:'ws-05',order:5,workstream:'Product',wsBadge:'badge-prod',activity:'New apps / features launch-ready',owner:'Product PM',deadline:'Jul 25',status:'yellow',progress:60,path:'Complete UAT; resolve blocking bugs',next:'Finalize UAT checklist by EOW',tickets:[],risk:'medium'},
+  {id:'ws-06',order:6,workstream:'Marketing',wsBadge:'badge-mkt',activity:'GTM activities (launch content, comms, campaigns)',owner:'Marketing Lead',deadline:'Aug 1',status:'green',progress:85,path:'On track — comms calendar locked',next:'Send final BTS email sequence Aug 1',tickets:[],risk:'low'},
+  {id:'ws-07',order:7,workstream:'CX',wsBadge:'badge-cx',activity:'Internal training — CX & support readiness',owner:'CX Manager',deadline:'Jul 25',status:'yellow',progress:40,path:'Deliver training sessions; update playbooks & FAQs',next:'Schedule training dates; draft agenda',tickets:[],risk:'medium'},
+  {id:'ws-08',order:8,workstream:'Operations',wsBadge:'badge-ops',activity:'Ops / infrastructure scale-up',owner:'DevOps Lead',deadline:'Jul 18',status:'green',progress:80,path:'Auto-scaling policies reviewed; on track',next:'Confirm capacity reservation with cloud provider',tickets:[],risk:'low'},
+];
+
+let rows=[], isAdmin=false, activeView='highlevel', jiraCfg=null, app, db;
+let donutFilter=null;
+
+async function init(){
+  try{
+    app=initializeApp(firebaseConfig);
+    db=getFirestore(app,'bts-dashboard');
+    jiraCfg=loadJiraCfg();
+    await loadRows();
+  }catch(e){
+    console.error(e);
+    rows=SEED.map(r=>({...r,tickets:[]}));
+    render();
+  }
+  updateTopbar();
+}
+
+async function loadRows(){
+  const snap=await getDocs(collection(db,'workstreams'));
+  if(snap.empty){ rows=SEED.map(r=>({...r,tickets:[]})); await saveAll(); }
+  else{ rows=snap.docs.map(d=>({tickets:[],...d.data(),id:d.id})); rows.sort((a,b)=>a.order-b.order); }
+  render(); stampSaved('Loaded from Firestore');
+}
+async function saveAll(){ for(const r of rows) await setDoc(doc(db,'workstreams',r.id),r); stampSaved('Saved to Firestore'); }
+async function deleteRowById(id){ rows=rows.filter(r=>r.id!==id); if(db) await deleteDoc(doc(db,'workstreams',id)); render(); stampSaved('Row deleted'); }
+window.deleteRow=deleteRowById;
+
+function loadJiraCfg(){ try{ return JSON.parse(localStorage.getItem('bts_jira')||'null'); }catch(e){ return null; } }
+function saveJiraCfgLocal(c){ localStorage.setItem('bts_jira',JSON.stringify(c)); }
+
+async function jiraFetch(path, cfg){
+  const c = cfg || jiraCfg;
+  if(!c) throw new Error('Jira not configured');
+  const res=await fetch('/.netlify/functions/jira-proxy',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({path:`rest/api/3/${path}`,email:c.email,token:c.token})
+  });
+  if(!res.ok){
+    const txt=await res.text().catch(()=>'');
+    throw new Error(`Jira ${res.status}${txt?' — '+txt.slice(0,120):''}`);
+  }
+  return res.json();
+}
+async function fetchProjectTickets(key){
+  const jql=encodeURIComponent(`project=${key} AND labels=BTS AND statusCategory != Done ORDER BY updated DESC`);
+  const data=await jiraFetch(`search?jql=${jql}&maxResults=50&fields=summary,status,assignee,priority`);
+  return (data.issues||[]).map(i=>({key:i.key,summary:i.fields.summary||'',status:i.fields.status?.name||'',statusCategory:i.fields.status?.statusCategory?.key||'',assignee:i.fields.assignee?.displayName||'Unassigned',priority:i.fields.priority?.name||'',url:`${JIRA_BASE}/browse/${i.key}`}));
+}
+
+async function fetchByMappingType(m){
+  let jql;
+  if(!m.type||m.type==='project'){
+    jql=`project=${m.key} AND labels=BTS AND statusCategory != Done ORDER BY updated DESC`;
+  } else if(m.type==='epic'){
+    jql=`"Epic Link"=${m.key} AND statusCategory != Done ORDER BY updated DESC`;
+  } else if(m.type==='label'){
+    jql=`labels="${m.key}" AND statusCategory != Done ORDER BY updated DESC`;
+  } else {
+    jql=`project=${m.key} AND statusCategory != Done ORDER BY updated DESC`;
+  }
+  const data=await jiraFetch(`search?jql=${encodeURIComponent(jql)}&maxResults=50&fields=summary,status,assignee,priority`);
+  return (data.issues||[]).map(i=>({key:i.key,summary:i.fields.summary||'',status:i.fields.status?.name||'',statusCategory:i.fields.status?.statusCategory?.key||'',assignee:i.fields.assignee?.displayName||'Unassigned',priority:i.fields.priority?.name||'',url:`${JIRA_BASE}/browse/${i.key}`}));
+}
+
+window.handleJiraSync=async function(){
+  if(!jiraCfg?.mappings?.length){ openJiraSettings(); return; }
+  const btn=document.getElementById('jira-sync-btn');
+  btn.textContent='Syncing…'; btn.disabled=true;
+  const log=[];
+  try{
+    for(const m of jiraCfg.mappings){
+      try{
+        log.push({t:'info',msg:`Fetching ${m.key}…`});
+        const tickets=await fetchByMappingType(m);
+        const matched=rows.filter(r=>r.workstream===m.workstream);
+        if(!matched.length){ log.push({t:'err',msg:`No rows match "${m.workstream}"`}); continue; }
+        for(const row of matched){
+          const kept=(row.tickets||[]).filter(t=>!tickets.find(nt=>nt.key===t.key));
+          row.tickets=[...kept,...tickets];
+        }
+        log.push({t:'ok',msg:`${m.type||'project'} ${m.key}: ${tickets.length} ticket${tickets.length!==1?'s':''} → ${m.workstream}`});
+      }catch(e){ log.push({t:'err',msg:`${m.key}: ${e.message}`}); }
+    }
+    await saveAll(); updateMetrics(); render(); showSyncLog(log);
+  }finally{ btn.textContent='Sync Jira'; btn.disabled=false; }
+};
+function showSyncLog(log){ const o=document.getElementById('_sl'); if(o) o.remove(); const el=document.createElement('div'); el.id='_sl'; el.className='sync-log open'; el.innerHTML=log.map(l=>`<div class="sync-line ${l.t}">${l.msg}</div>`).join(''); document.getElementById('main').prepend(el); setTimeout(()=>el.remove(),8000); }
+
+/* ── browser state ── */
+let browserResults=[], browserTab='all', browserQuery='';
+
+window.openJiraSettings=function(){
+  document.getElementById('jira-overlay').style.display='flex';
+  document.getElementById('jira-email').value=jiraCfg?.email||'';
+  document.getElementById('jira-token').value=jiraCfg?.token||'';
+  renderMappings(jiraCfg?.mappings||[{key:'ENG',type:'project',workstream:'Engineering'}]);
+  const hasCreds = !!(jiraCfg?.email && jiraCfg?.token);
+  document.getElementById('browse-btn').style.display = hasCreds?'inline-flex':'none';
+};
+
+function renderMappings(maps){
+  document.getElementById('mapping-list').innerHTML = maps.length
+    ? maps.map((m,i)=>`
+      <div class="mapping-row" data-i="${i}">
+        <span class="map-chip">
+          <span class="map-chip-type ${m.type||'project'}">${(m.type||'project').toUpperCase()}</span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--text)">${esc(m.key)}</span>
+          ${m.name?`<span style="font-size:11px;color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(m.name)}</span>`:''}
+        </span>
+        <span style="color:var(--text3);font-size:12px;flex-shrink:0;">→</span>
+        <input class="mapping-ws" placeholder="Engineering" value="${esc(m.workstream)}" style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--font);"/>
+        <input type="hidden" class="mapping-key" value="${esc(m.key)}"/>
+        <input type="hidden" class="mapping-type" value="${esc(m.type||'project')}"/>
+        <input type="hidden" class="mapping-name" value="${esc(m.name||'')}"/>
+        <button class="mapping-del" onclick="removeMapping(${i})">✕</button>
+      </div>`).join('')
+    : '<div style="font-size:12px;color:var(--text3);padding:8px 0;">No mappings yet. Use Browse Jira or add manually.</div>';
+}
+
+function getMappings(){
+  return [...document.querySelectorAll('#mapping-list .mapping-row')].map(r=>({
+    key: r.querySelector('.mapping-key').value.trim(),
+    type: r.querySelector('.mapping-type').value.trim()||'project',
+    name: r.querySelector('.mapping-name').value.trim(),
+    workstream: r.querySelector('.mapping-ws').value.trim()
+  }));
+}
+
+window.addMapping=function(){
+  const c=getMappings(); c.push({key:'',type:'project',name:'',workstream:''}); renderMappings(c);
+};
+window.removeMapping=function(i){ const c=getMappings(); c.splice(i,1); renderMappings(c); };
+
+window.saveJiraSettings=function(){
+  const email=document.getElementById('jira-email').value.trim();
+  const token=document.getElementById('jira-token').value.trim();
+  const mappings=getMappings().filter(m=>m.key&&m.workstream);
+  const err=document.getElementById('jira-save-error');
+  if(!email||!token){ err.style.display='block'; err.textContent='Email and API token are required.'; return; }
+  err.style.display='none';
+  jiraCfg={email,token,mappings};
+  saveJiraCfgLocal(jiraCfg);
+  closeOverlay('jira-overlay');
+  stampSaved('Jira settings saved');
+};
+
+/* ── JIRA BROWSER ── */
+window.openJiraBrowser=async function(){
+  const email=document.getElementById('jira-email').value.trim();
+  const token=document.getElementById('jira-token').value.trim();
+  if(!email||!token){ document.getElementById('jira-save-error').style.display='block'; document.getElementById('jira-save-error').textContent='Save email and API token first.'; return; }
+  document.getElementById('jira-browser').style.display='flex';
+  document.getElementById('browser-search').value='';
+  browserQuery=''; browserTab='all';
+  document.querySelectorAll('.browser-tab').forEach((b,i)=>b.classList.toggle('active',i===0));
+  populateBrowserWsSelect();
+  setBrowserStatus('Loading projects, epics, and labels…');
+  try{
+    const tempCfg={email,token};
+    const [projects, epics, labels] = await Promise.all([
+      fetchProjects(tempCfg), fetchEpics(tempCfg), fetchLabels(tempCfg)
+    ]);
+    browserResults=[
+      ...projects.map(p=>({type:'project',key:p.key,name:p.name,id:p.id})),
+      ...epics.map(e=>({type:'epic',key:e.key,name:e.fields?.summary||e.key,id:e.id})),
+      ...labels.map(l=>({type:'label',key:l,name:l,id:l}))
+    ];
+    renderBrowserResults();
+  }catch(e){
+    setBrowserStatus(`Failed to load: ${e.message}. Check your email and API token.`);
+  }
+};
+
+async function fetchProjects(cfg){
+  const d=await jiraFetch('project/search?maxResults=100&orderBy=name',cfg);
+  return d.values||[];
+}
+
+async function fetchEpics(cfg){
+  const jql=encodeURIComponent('issuetype=Epic ORDER BY updated DESC');
+  const d=await jiraFetch(`search?jql=${jql}&maxResults=100&fields=summary,project`,cfg);
+  return d.issues||[];
+}
+
+async function fetchLabels(cfg){
+  const d=await jiraFetch('label?maxResults=100',cfg);
+  return d.values||[];
+}
+
+function setBrowserStatus(msg){ document.getElementById('browser-body').innerHTML=`<div class="browser-status">${msg}</div>`; }
+
+function populateBrowserWsSelect(){
+  const sel=document.getElementById('browser-ws-select');
+  const wsNames=[...new Set(rows.map(r=>r.workstream))];
+  sel.innerHTML=wsNames.map(w=>`<option value="${esc(w)}">${esc(w)}</option>`).join('');
+}
+
+function renderBrowserResults(){
+  const q=browserQuery.toLowerCase();
+  const existing=getMappings().map(m=>m.key);
+  const filtered=browserResults.filter(r=>{
+    if(browserTab!=='all'&&r.type!==browserTab) return false;
+    if(!q) return true;
+    return r.key.toLowerCase().includes(q)||r.name.toLowerCase().includes(q);
+  });
+  if(!filtered.length){ setBrowserStatus(q?`No results for "${q}".`:'No items found.'); return; }
+  document.getElementById('browser-body').innerHTML=filtered.slice(0,80).map(r=>{
+    const isMapped=existing.includes(r.key);
+    return `<div class="browser-result${isMapped?' mapped':''}" onclick="${isMapped?'':` addBrowserMapping('${r.key.replace(/'/g,"\'")}','${r.type}','${r.name.replace(/'/g,"\'").replace(/"/g,"&quot;")}') `}">
+      <span class="br-type ${r.type}">${r.type}</span>
+      <span class="br-key">${esc(r.key)}</span>
+      <span class="br-name" title="${esc(r.name)}">${esc(r.name)}</span>
+      ${isMapped
+        ? `<span class="br-mapped-badge">✓ mapped</span>`
+        : `<span class="br-add">+</span>`}
+    </div>`;
+  }).join('');
+}
+
+window.browserSearch=function(val){
+  browserQuery=val;
+  if(browserResults.length) renderBrowserResults();
+};
+
+window.setBrowserTab=function(tab,btn){
+  browserTab=tab;
+  document.querySelectorAll('.browser-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(browserResults.length) renderBrowserResults();
+};
+
+window.addBrowserMapping=function(key,type,name){
+  const ws=document.getElementById('browser-ws-select').value||rows[0]?.workstream||'Engineering';
+  const cur=getMappings();
+  if(cur.find(m=>m.key===key)) return;
+  cur.push({key,type,name,workstream:ws});
+  renderMappings(cur);
+  renderBrowserResults();
+};
+
+window.closeBrowser=function(){
+  document.getElementById('jira-browser').style.display='none';
+  document.getElementById('browse-btn').style.display='inline-flex';
+};
+
+window.addTicketToRow=async function(rowId){
+  const inp=document.getElementById('ticket-input-'+rowId);
+  const key=(inp?.value||'').trim().toUpperCase();
+  if(!key){ if(inp) inp.focus(); return; }
+
+  const row=rows.find(r=>r.id===rowId);
+  if(!row) return;
+
+  // dedupe
+  if((row.tickets||[]).find(t=>t.key===key)){
+    if(inp){ inp.value=''; inp.placeholder='Already linked'; setTimeout(()=>inp.placeholder=ticketPlaceholder,2000); }
+    return;
+  }
+
+  // build stub immediately — works even if Jira is down
+  let ticket={key,summary:'',status:'',statusCategory:'',assignee:'',priority:'',url:`${JIRA_BASE}/browse/${key}`};
+
+  // try to enrich from Jira but never block on it
+  if(jiraCfg){
+    try{
+      const d=await jiraFetch(`issue/${key}?fields=summary,status,assignee,priority`);
+      ticket={key,
+        summary:d.fields?.summary||'',
+        status:d.fields?.status?.name||'',
+        statusCategory:d.fields?.status?.statusCategory?.key||'',
+        assignee:d.fields?.assignee?.displayName||'Unassigned',
+        priority:d.fields?.priority?.name||'',
+        url:`${JIRA_BASE}/browse/${key}`
+      };
+    }catch(e){
+      // Jira unavailable — keep stub, still save
+    }
+  }
+
+  // save to row and Firestore
+  row.tickets=[...(row.tickets||[]),ticket];
+  try{
+    if(db) await setDoc(doc(db,'workstreams',rowId),row);
+  }catch(e){
+    console.error('Firestore save failed:',e);
+  }
+
+  if(inp) inp.value='';
+  updateMetrics();
+  // re-render without wiping drawer — just refresh detail panel in place
+  updateMetrics();
+  if(activeView==='highlevel') renderHighLevel();
+  else renderDetailed();
+  showDetail(rowId);
+};
+
+const ticketPlaceholder='ENG-123';
+window.removeTicket=async function(rowId,key){
+  const row=rows.find(r=>r.id===rowId); if(!row) return;
+  row.tickets=(row.tickets||[]).filter(t=>t.key!==key);
+  if(db) await setDoc(doc(db,'workstreams',rowId),row);
+  updateMetrics(); render();
+};
+
+/* ── AUTH ── */
+window.checkPassword=function(){
+  if(document.getElementById('auth-input').value===ADMIN_PASSWORD){
+    isAdmin=true;
+    document.getElementById('auth-overlay').style.display='none';
+    document.getElementById('admin-btn').textContent='Lock';
+    document.getElementById('admin-btn').className='btn btn-danger btn-sm';
+    document.getElementById('jira-sync-btn').style.display='inline-flex';
+    document.getElementById('jira-cfg-btn').style.display='inline-flex';
+    document.getElementById('vt-jira').style.display='inline-block';
+    render();
+  }else{ document.getElementById('auth-error').style.display='block'; document.getElementById('auth-input').value=''; document.getElementById('auth-input').focus(); }
+};
+window.toggleAdminMode=function(){
+  if(isAdmin){
+    isAdmin=false;
+    document.getElementById('admin-btn').textContent='Admin';
+    document.getElementById('admin-btn').className='btn btn-ghost btn-sm';
+    document.getElementById('jira-sync-btn').style.display='none';
+    document.getElementById('jira-cfg-btn').style.display='none';
+    document.getElementById('vt-jira').style.display='none';
+    if(activeView==='jira'){ activeView='highlevel'; document.querySelectorAll('.vt-btn').forEach((b,i)=>b.classList.toggle('active',i===0)); }
+    render();
+  }else{
+    document.getElementById('auth-overlay').style.display='flex';
+    document.getElementById('auth-input').value=''; document.getElementById('auth-error').style.display='none';
+    setTimeout(()=>document.getElementById('auth-input').focus(),50);
+  }
+};
+window.closeOverlay=id=>document.getElementById(id).style.display='none';
+window.switchView=function(view,btn){ activeView=view; document.querySelectorAll('.vt-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); render(); };
+window.addRow=function(){ rows.push({id:'ws-'+Date.now(),order:rows.length+1,workstream:'New',wsBadge:'badge-prod',activity:'New activity',owner:'TBD',deadline:'Aug 1',status:'yellow',progress:0,path:'',next:'',tickets:[],risk:'medium'}); render(); };
+window.saveChanges=async function(){
+  document.querySelectorAll('#tbl-body tr[data-id]').forEach(tr=>{
+    const row=rows.find(r=>r.id===tr.dataset.id); if(!row) return;
+    row.activity=tr.querySelector('[data-f="activity"]').value; row.owner=tr.querySelector('[data-f="owner"]').value;
+    row.deadline=tr.querySelector('[data-f="deadline"]').value; row.status=tr.querySelector('[data-f="status"]').value;
+    row.progress=parseInt(tr.querySelector('[data-f="progress"]').value)||0;
+    row.path=tr.querySelector('[data-f="path"]').value; row.next=tr.querySelector('[data-f="next"]').value;
+  });
+  await saveAll(); updateMetrics(); render();
+};
+
+/* ── DETAIL DRAWER ── */
+window.showDetail=function(id){
+  const row=rows.find(r=>r.id===id); if(!row) return;
+  const el=document.getElementById('detail-drawer'); if(!el) return;
+  const sc={green:'var(--green)',yellow:'var(--yellow)',red:'var(--red)'};
+  const sl={green:'On track',yellow:'At risk',red:'Blocked'};
+  const sdot={green:'#4a9660',yellow:'#c49a3c',red:'#b85c5c',indeterminate:'#888780',done:'#4a9660',new:'#5a6170'};
+  const tickets=row.tickets||[];
+  const tcards=tickets.length
+    ?tickets.map(t=>`<div class="ticket-card"><span class="ticket-sdot" style="background:${sdot[t.statusCategory]||'#5a6170'}" title="${esc(t.status)}"></span><a class="ticket-key" href="${t.url}" target="_blank">${t.key}</a><span class="ticket-summary" title="${esc(t.summary)}">${esc(t.summary)||'—'}</span><span style="font-size:10px;color:var(--text3);white-space:nowrap;">${esc(t.status)}</span>${isAdmin?`<button class="ticket-remove" onclick="removeTicket('${id}','${t.key}')">✕</button>`:''}</div>`).join('')
+    :'<span style="font-size:12px;color:var(--text3);">No tickets linked yet.</span>';
+  el.style.display='block';
+  el.innerHTML=`<div class="detail-header"><div class="detail-title" style="color:${sc[row.status]}">${esc(row.activity)}</div><button class="close-btn" onclick="document.getElementById('detail-drawer').style.display='none'">✕</button></div>
+    <div class="detail-body">
+      <div><div class="df-label">Workstream</div><div class="df-val">${esc(row.workstream)}</div></div>
+      <div><div class="df-label">Owner</div><div class="df-val">${esc(row.owner)}</div></div>
+      <div><div class="df-label">Deadline</div><div class="df-val" style="font-family:var(--mono)">${esc(row.deadline)}</div></div>
+      <div><div class="df-label">Status</div><div class="df-val" style="color:${sc[row.status]};font-weight:500;">${sl[row.status]}</div></div>
+      <div><div class="df-label">Progress</div><div class="df-val">${row.progress}%</div></div>
+      <div><div class="df-label">Risk</div><div class="df-val"><span class="risk-pill risk-${row.risk||'low'}" style="border:1px solid">${(row.risk||'low').charAt(0).toUpperCase()+(row.risk||'low').slice(1)}</span></div></div>
+      <div class="df-full"><div class="df-label">Path to green</div><div class="df-val">${esc(row.path)||'—'}</div></div>
+      <div class="df-full"><div class="df-label">Next steps</div><div class="df-val">${esc(row.next)||'—'}</div></div>
+    </div>
+    <div class="tickets-section">
+      <span class="tickets-label">Jira tickets (${tickets.length})</span>
+      <div class="tickets-list">${tcards}</div>
+      ${isAdmin?`<div class="ticket-add-row"><input class="ticket-input" id="ticket-input-${id}" placeholder="ENG-123" onkeydown="if(event.key==='Enter')addTicketToRow('${id}')"/><button class="btn btn-ghost btn-sm" onclick="addTicketToRow('${id}')">Link ticket</button></div>`:''}
+    </div>`;
+};
+
+/* ── HELPERS ── */
+function weeksOut(){ return Math.max(0,Math.ceil((BTS_DATE-new Date())/(1000*60*60*24*7))); }
+function daysOut(){  return Math.max(0,Math.ceil((BTS_DATE-new Date())/(1000*60*60*24))); }
+function stampSaved(msg){ const n=new Date(); document.getElementById('last-saved').textContent=(msg||'Saved')+' · '+n.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' at '+n.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); }
+function updateTopbar(){ const w=weeksOut(),c=document.getElementById('weeks-chip'); c.textContent=w+' weeks out'; if(w<=8) c.classList.add('urgent'); document.getElementById('date-chip').textContent=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+function updateMetrics(){
+  const g=rows.filter(r=>r.status==='green').length, y=rows.filter(r=>r.status==='yellow').length, r2=rows.filter(r=>r.status==='red').length;
+  const avg=rows.length?Math.round(rows.reduce((a,r)=>a+r.progress,0)/rows.length):0;
+  const tc=rows.reduce((a,r)=>a+(r.tickets||[]).length,0);
+  document.getElementById('m-days').textContent=daysOut();
+  document.getElementById('m-weeks').textContent=weeksOut();
+  document.getElementById('m-avg').textContent=avg+'%';
+  document.getElementById('m-g').textContent=g;
+  document.getElementById('m-y').textContent=y;
+  document.getElementById('m-r').textContent=r2;
+  document.getElementById('m-tickets').textContent=tc;
+}
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ── DONUT CHART ── */
+function buildDonut(g,y,r){
+  const total=g+y+r||1;
+  const R=68, C=2*Math.PI*R;
+  const gPct=g/total, yPct=y/total, rPct=r/total;
+  const gDash=gPct*C, yDash=yPct*C, rDash=rPct*C;
+  const gOff=0, yOff=C-gDash, rOff=C-gDash-yDash;
+  const avg=rows.length?Math.round(rows.reduce((a,r)=>a+r.progress,0)/rows.length):0;
+  const f=donutFilter;
+  const gCls=`donut-seg${f==='green'?' active':f?'  dimmed':''}`;
+  const yCls=`donut-seg${f==='yellow'?' active':f?' dimmed':''}`;
+  const rCls=`donut-seg${f==='red'?' active':f?' dimmed':''}`;
+  const centerLabel = f ? {green:'On track',yellow:'At risk',red:'Blocked'}[f] : 'readiness';
+  const centerVal   = f ? {green:g,yellow:y,red:r}[f] : avg+'%';
+  return `
+    <div class="donut-panel">
+      <div class="donut-title" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Program health</span>
+        ${f?`<span style="font-size:10px;color:var(--accent);cursor:pointer;" onclick="setDonutFilter(null)">✕ clear filter</span>`:''}
+      </div>
+      <div class="donut-wrap">
+        <svg width="160" height="160" viewBox="0 0 160 160" style="cursor:pointer;">
+          <circle cx="80" cy="80" r="${R}" fill="none" stroke="#1c1f23" stroke-width="16"/>
+          ${g>0?`<circle class="${gCls}" cx="80" cy="80" r="${R}" fill="none" stroke="#4a9660" stroke-width="16" stroke-dasharray="${gDash} ${C-gDash}" stroke-dashoffset="${-gOff}" onclick="setDonutFilter('green')"><title>On track: ${g} workstream${g!==1?'s':''}</title></circle>`:''}
+          ${y>0?`<circle class="${yCls}" cx="80" cy="80" r="${R}" fill="none" stroke="#c49a3c" stroke-width="16" stroke-dasharray="${yDash} ${C-yDash}" stroke-dashoffset="${-yOff}" onclick="setDonutFilter('yellow')"><title>At risk: ${y} workstream${y!==1?'s':''}</title></circle>`:''}
+          ${r>0?`<circle class="${rCls}" cx="80" cy="80" r="${R}" fill="none" stroke="#b85c5c" stroke-width="16" stroke-dasharray="${rDash} ${C-rDash}" stroke-dashoffset="${-rOff}" onclick="setDonutFilter('red')"><title>Blocked: ${r} workstream${r!==1?'s':''}</title></circle>`:''}
+        </svg>
+        <div class="donut-center" style="pointer-events:none;">
+          <div class="donut-pct" style="${f==='green'?'color:var(--green)':f==='yellow'?'color:var(--yellow)':f==='red'?'color:var(--red)':''}">${centerVal}</div>
+          <div class="donut-pct-label">${centerLabel}</div>
+        </div>
+      </div>
+      <div class="donut-legend">
+        <div class="donut-leg-row${f==='green'?' active':''}" onclick="setDonutFilter('green')"><div class="donut-leg-left"><span class="donut-leg-dot" style="background:var(--green)"></span><span class="donut-leg-label">On track</span></div><span class="donut-leg-count" style="${f==='green'?'color:var(--green)':''}">${g}</span></div>
+        <div class="donut-leg-row${f==='yellow'?' active':''}" onclick="setDonutFilter('yellow')"><div class="donut-leg-left"><span class="donut-leg-dot" style="background:var(--yellow)"></span><span class="donut-leg-label">At risk</span></div><span class="donut-leg-count" style="${f==='yellow'?'color:var(--yellow)':''}">${y}</span></div>
+        <div class="donut-leg-row${f==='red'?' active':''}" onclick="setDonutFilter('red')"><div class="donut-leg-left"><span class="donut-leg-dot" style="background:var(--red)"></span><span class="donut-leg-label">Blocked</span></div><span class="donut-leg-count" style="${f==='red'?'color:var(--red)':''}">${r}</span></div>
+        <div class="donut-divider"></div>
+        <div class="donut-leg-row" style="cursor:default;" onclick="setDonutFilter(null)"><div class="donut-leg-left"><span class="donut-leg-label" style="color:var(--text3)">Total workstreams</span></div><span class="donut-leg-count">${total}</span></div>
+        <div class="donut-leg-row" style="cursor:default;"><div class="donut-leg-left"><span class="donut-leg-label" style="color:var(--text3)">Jira tickets</span></div><span class="donut-leg-count" style="color:var(--accent)">${rows.reduce((a,r)=>a+(r.tickets||[]).length,0)}</span></div>
+      </div>
+    </div>`;
+}
+
+window.setDonutFilter = function(status){
+  donutFilter = donutFilter===status ? null : status;
+  renderHighLevel();
+};
+
+/* ── SWIMLANE ── */
+function buildSwimlane(){
+  const filteredRows = donutFilter ? rows.filter(r=>r.status===donutFilter) : rows;
+  const filterBanner = donutFilter ? `<div style="font-size:12px;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:${{green:'var(--green)',yellow:'var(--yellow)',red:'var(--red)'}[donutFilter]};display:inline-block;"></span>Showing <strong>${{green:'on track',yellow:'at risk',red:'blocked'}[donutFilter]}</strong> workstreams only &nbsp;<span style="color:var(--accent);cursor:pointer;" onclick="setDonutFilter(null)">✕ clear</span></div>` : '';
+  const TODAY=new Date(), START=new Date(2026,0,1), END=new Date(2026,7,15), SPAN=END-START;
+  const pct=d=>Math.max(0,Math.min(100,(d-START)/SPAN*100));
+  const MONTHS=[{l:'Jan',m:0},{l:'Feb',m:1},{l:'Mar',m:2},{l:'Apr',m:3},{l:'May',m:4},{l:'Jun',m:5},{l:'Jul',m:6},{l:'Aug',m:7}];
+  const mHtml=MONTHS.map(x=>{ const s=pct(new Date(2026,x.m,1)),e=Math.min(100,pct(new Date(2026,x.m+1,1))),w=e-s; return w>0?`<div class="sl-month" style="width:${w}%">${x.l}</div>`:''; }).join('');
+  const sc={green:'var(--green)',yellow:'var(--yellow)',red:'var(--red)'};
+  const pdl=dl=>{ const mo={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11}; const[m,d]=dl.split(' '); return new Date(2026,mo[m],parseInt(d)); };
+  const tp=pct(TODAY);
+  const rHtml=filteredRows.map((r,i)=>{
+    const dp=pct(pdl(r.deadline)), color=sc[r.status], tks=r.tickets||[];
+    const mini=tks.slice(0,4).map(t=>`<a class="sl-tc" href="${t.url}" target="_blank" onclick="event.stopPropagation()">${t.key}</a>`).join('');
+    const more=tks.length>4?`<span style="font-size:9px;color:var(--text3);font-family:var(--mono);">+${tks.length-4}</span>`:'';
+    return `<div class="sl-row" onclick="showDetail('${r.id}')">
+      <div class="sl-label">
+        <div class="sl-name">${r.activity.length>26?r.activity.slice(0,24)+'…':r.activity}</div>
+        <div class="sl-owner">${esc(r.owner)}</div>
+        ${tks.length?`<div class="sl-tickets-mini">${mini}${more}</div>`:''}
+      </div>
+      <div class="sl-track">
+        <div class="sl-track-bg"></div>
+        <div class="sl-track-fill" style="width:${r.progress}%;background:${color};"></div>
+        ${i===0?`<div class="sl-today" style="left:${tp}%"><div class="sl-today-lbl" style="left:${tp<60?'4px':'-40px'}">today</div></div>`:`<div class="sl-today" style="left:${tp}%"></div>`}
+        <div class="sl-milestone" style="left:${dp}%;background:${color};"><div class="sl-dl-lbl">${r.deadline}</div></div>
+        <div class="sl-pct">${r.progress}%</div>
+      </div>
+    </div>`;
+  }).join('');
+  const emptyMsg = filteredRows.length===0 ? `<div style="padding:24px 0;color:var(--text3);font-size:13px;">No workstreams match this filter.</div>` : '';
+  return `${filterBanner}<div class="swimlane-wrap"><div class="sl-inner">
+    <div class="sl-month-row" style="padding-right:36px;">${mHtml}</div>${rHtml}${emptyMsg}
+  </div></div>
+  <div class="legend">
+    <span class="leg"><span class="leg-dot" style="background:var(--green)"></span>On track</span>
+    <span class="leg"><span class="leg-dot" style="background:var(--yellow)"></span>At risk</span>
+    <span class="leg"><span class="leg-dot" style="background:var(--red)"></span>Blocked</span>
+    <span class="leg"><span class="leg-line"></span>Today</span>
+    <span style="font-size:10px;color:var(--text3);margin-left:4px;">Click any row for details + Jira tickets</span>
+  </div>`;
+}
+
+/* ── RENDER ── */
+function render(){
+  updateMetrics();
+  if(activeView==='highlevel') renderHighLevel();
+  else if(activeView==='detailed') renderDetailed();
+  else renderJiraTab();
+}
+
+function renderHighLevel(){
+  const g=rows.filter(r=>r.status==='green').length;
+  const y=rows.filter(r=>r.status==='yellow').length;
+  const r=rows.filter(r=>r.status==='red').length;
+  document.getElementById('main').innerHTML=`
+    <div class="hl-grid">
+      <div>
+        ${buildSwimlane()}
+        <div id="detail-drawer" class="detail" style="display:none;margin-top:20px;"></div>
+      </div>
+      ${buildDonut(g,y,r)}
+    </div>`;
+}
+
+function renderDetailed(){
+  const sc={green:'g',yellow:'y',red:'r'}, sl={green:'On track',yellow:'At risk',red:'Blocked'};
+  const tbody=rows.map(r=>{
+    const tks=(r.tickets||[]);
+    const chips=tks.map(t=>`<a class="tbl-ticket" href="${t.url}" target="_blank">${t.key}</a>`).join('');
+    const cells=isAdmin?`
+      <td><input class="editable" data-f="activity" value="${esc(r.activity)}"/></td>
+      <td><input class="editable" data-f="owner" value="${esc(r.owner)}"/></td>
+      <td><input class="editable" data-f="deadline" value="${esc(r.deadline)}" style="width:70px"/></td>
+      <td><select class="status-select ${sc[r.status]}" data-f="status" onchange="this.className='status-select '+{green:'g',yellow:'y',red:'r'}[this.value]">
+        <option value="green" ${r.status==='green'?'selected':''}>On track</option>
+        <option value="yellow" ${r.status==='yellow'?'selected':''}>At risk</option>
+        <option value="red" ${r.status==='red'?'selected':''}>Blocked</option>
+      </select></td>
+      <td><select class="risk-select risk-${r.risk||'low'}" data-f="risk" onchange="this.className='risk-select risk-'+this.value">
+        <option value="low" ${(r.risk||'low')==='low'?'selected':''}>Low</option>
+        <option value="medium" ${r.risk==='medium'?'selected':''}>Medium</option>
+        <option value="high" ${r.risk==='high'?'selected':''}>High</option>
+        <option value="critical" ${r.risk==='critical'?'selected':''}>Critical</option>
+      </select></td>
+      <td><input class="progress-input" data-f="progress" type="number" min="0" max="100" value="${r.progress}"/>%</td>
+      <td><textarea class="editable" data-f="path" rows="2">${esc(r.path)}</textarea></td>
+      <td><textarea class="editable" data-f="next" rows="2">${esc(r.next)}</textarea></td>
+      <td><div class="tbl-tickets" style="margin-bottom:4px;">${chips}</div><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();showDetail('${r.id}')">+ link</button></td>
+      <td><button class="del-btn" onclick="deleteRow('${r.id}')">✕</button></td>`:`
+      <td>${esc(r.activity)}</td>
+      <td>${esc(r.owner)}</td>
+      <td style="font-family:var(--mono);font-size:12px;white-space:nowrap;">${esc(r.deadline)}</td>
+      <td><span class="status-pill ${sc[r.status]}">${sl[r.status]}</span></td>
+      <td><span class="risk-pill risk-${r.risk||'low'}" style="border:1px solid">${(r.risk||'low').charAt(0).toUpperCase()+(r.risk||'low').slice(1)}</span></td>
+      <td style="font-family:var(--mono)">${r.progress}%</td>
+      <td style="color:var(--text2);font-size:12px;">${esc(r.path)}</td>
+      <td style="color:var(--text2);font-size:12px;">${esc(r.next)}</td>
+      <td><div class="tbl-tickets">${chips||'<span style="font-size:11px;color:var(--text3);">—</span>'}</div></td>
+      <td></td>`;
+    return `<tr data-id="${r.id}"><td><span class="ws-badge ${r.wsBadge}">${r.workstream}</span></td>${cells}</tr>`;
+  }).join('');
+  document.getElementById('main').innerHTML=`
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Workstream</th><th>Activity</th><th>Owner</th><th>Deadline</th><th>Status</th><th>Risk</th><th>%</th><th>Path to green</th><th>Next steps</th><th>Jira tickets</th><th></th></tr></thead>
+      <tbody id="tbl-body">${tbody}</tbody>
+    </table></div>
+    ${isAdmin?`<button class="add-row-btn" onclick="addRow()">+ add workstream</button><div class="save-btn-wrap"><button class="btn btn-primary" onclick="saveChanges()">Save changes</button></div>`:''}
+    <div id="detail-drawer" class="detail" style="display:none;margin-top:20px;"></div>`;
+}
+
+function renderJiraTab(){
+  const all=[]; rows.forEach(r=>(r.tickets||[]).forEach(t=>all.push({...t,rowId:r.id,workstream:r.workstream})));
+  const sdot={green:'#4a9660',yellow:'#c49a3c',red:'#b85c5c',indeterminate:'#888780',done:'#4a9660',new:'#5a6170'};
+  if(!all.length){
+    document.getElementById('main').innerHTML=`<div style="text-align:center;padding:60px 20px;color:var(--text3);">
+      <div style="font-size:32px;margin-bottom:12px;">◎</div>
+      <div style="font-size:15px;margin-bottom:6px;color:var(--text2);">No Jira tickets linked yet</div>
+      <div style="font-size:12px;margin-bottom:20px;max-width:360px;margin-left:auto;margin-right:auto;">Use Sync Jira to auto-import tickets labelled BTS by project key, or link individually from the high-level or detailed views.</div>
+      ${isAdmin?`<button class="btn btn-jira" onclick="handleJiraSync()">Sync Jira now</button>`:''}
+    </div>`;
+    return;
+  }
+  const byWs={};
+  all.forEach(t=>{ if(!byWs[t.workstream]) byWs[t.workstream]=[]; byWs[t.workstream].push(t); });
+  const sections=Object.entries(byWs).map(([ws,tks])=>`
+    <div class="jira-card">
+      <div class="jira-card-title">${ws}</div>
+      <div class="jira-card-sub">${tks.length} ticket${tks.length!==1?'s':''}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;">
+        ${tks.map(t=>`<div class="ticket-card">
+          <span class="ticket-sdot" style="background:${sdot[t.statusCategory]||'#5a6170'}" title="${esc(t.status)}"></span>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;"><a class="ticket-key" href="${t.url}" target="_blank">${t.key}</a><span style="font-size:10px;color:var(--text3);">${esc(t.status)||'—'}</span></div>
+            <div style="font-size:11px;color:var(--text2);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(t.summary)}">${esc(t.summary)||'No summary'}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:1px;">${esc(t.assignee)||''}</div>
+          </div>
+          ${isAdmin?`<button class="ticket-remove" onclick="removeTicket('${t.rowId}','${t.key}')">✕</button>`:''}
+        </div>`).join('')}
+      </div>
+    </div>`).join('');
+  document.getElementById('main').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:8px;">
+      <span style="font-size:13px;color:var(--text2);">${all.length} ticket${all.length!==1?'s':''} across ${Object.keys(byWs).length} workstream${Object.keys(byWs).length!==1?'s':''}</span>
+      ${isAdmin?`<button class="btn btn-jira btn-sm" onclick="handleJiraSync()">Sync Jira</button>`:''}
+    </div>${sections}`;
+}
+
+document.getElementById('auth-input').addEventListener('keydown',e=>{ if(e.key==='Enter') window.checkPassword(); });
+init();
+</script>
+</body>
+</html>

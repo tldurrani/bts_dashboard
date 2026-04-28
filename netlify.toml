@@ -1,0 +1,10 @@
+[build]
+  publish = "."
+  edge_functions = "netlify/edge-functions"
+
+[build.environment]
+  SECRETS_SCAN_ENABLED = "false"
+
+[[edge_functions]]
+  path = "/.netlify/functions/jira-proxy"
+  function = "jira-proxy"
