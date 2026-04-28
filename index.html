@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>BTS Readiness Dashboard</title>
+<title id='doc-title'>BTS Readiness Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -348,7 +348,7 @@ td{padding:10px 12px;vertical-align:top;color:var(--text);}
     <div class="topbar-left">
       <span class="logo">Riverside Insights</span>
       <div class="divider-v"></div>
-      <span class="page-title">BTS Readiness Dashboard</span>
+      <span class="page-title" id="dash-title">BTS Readiness Dashboard</span>
     </div>
     <div class="topbar-right">
       <span class="chip" id="weeks-chip">— weeks out</span>
@@ -360,13 +360,14 @@ td{padding:10px 12px;vertical-align:top;color:var(--text);}
       </div>
       <button class="btn btn-jira btn-sm" id="jira-sync-btn" onclick="handleJiraSync()" style="display:none;">Sync Jira</button>
       <button class="btn btn-ghost btn-sm" id="jira-cfg-btn" onclick="openJiraSettings()" style="display:none;">Jira settings</button>
+      <button class="btn btn-ghost btn-sm" id="dash-settings-btn" onclick="openDashSettings()" style="display:none;" title="Dashboard settings">⚙ Settings</button>
       <button class="btn btn-ghost btn-sm" id="admin-btn" onclick="toggleAdminMode()">Admin</button>
     </div>
   </div>
 
   <!-- METRICS -->
   <div class="metrics">
-    <div class="mc"><div class="mc-label">Days to BTS</div><div class="mc-val" id="m-days">—</div><div class="mc-sub">Aug 1, 2026</div></div>
+    <div class="mc"><div class="mc-label">Days to BTS</div><div class="mc-val" id="m-days">—</div><div class="mc-sub" id="m-bts-date">Aug 1, 2026</div></div>
     <div class="mc"><div class="mc-label">Weeks out</div><div class="mc-val b" id="m-weeks">—</div></div>
     <div class="mc"><div class="mc-label">Readiness avg</div><div class="mc-val" id="m-avg">—</div><div class="mc-sub">across workstreams</div></div>
     <div class="mc"><div class="mc-label">On track</div><div class="mc-val g" id="m-g">—</div></div>
@@ -382,7 +383,23 @@ td{padding:10px 12px;vertical-align:top;color:var(--text);}
 
   <div class="footer">
     <span class="footer-txt" id="last-saved">—</span>
-    <span class="footer-txt">BTS opens Aug 1, 2026 · Monday Program Meeting · Biweekly DM Steering Committee</span>
+    <span class="footer-txt" id="footer-bts-txt">BTS opens Aug 1, 2026 · Monday Program Meeting · Biweekly DM Steering Committee</span>
+  </div>
+</div>
+
+<!-- DASHBOARD SETTINGS OVERLAY -->
+<div class="overlay" id="dash-settings-overlay" style="display:none;">
+  <div class="modal" style="width:380px;">
+    <div class="modal-title">Dashboard settings</div>
+    <div class="modal-sub">Rename this dashboard and set the target completion date.</div>
+    <div class="modal-label">Dashboard name</div>
+    <input class="modal-input" id="cfg-name" placeholder="BTS Readiness Dashboard" type="text"/>
+    <div class="modal-label">Target completion date</div>
+    <input class="modal-input" id="cfg-date" type="date"/>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="saveDashSettings()">Save</button>
+      <button class="btn btn-ghost" onclick="closeOverlay('dash-settings-overlay')">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -403,7 +420,8 @@ const firebaseConfig = {
   measurementId:     "G-2Y4JV3250F"
 };
 const ADMIN_PASSWORD = "bts2025";
-const BTS_DATE       = new Date(2026, 7, 1);  // August 1 2026
+let BTS_DATE_STR = '2026-08-01'; // overridden by dashConfig
+function getBTSDate(){ const d=new Date((dashConfig.btsDate||BTS_DATE_STR)+'T00:00:00'); return isNaN(d)?new Date(2026,7,1):d; }
 const JIRA_BASE      = "https://riversidejira.atlassian.net";
 
 const SEED = [
@@ -419,6 +437,37 @@ const SEED = [
 
 let rows=[], isAdmin=false, activeView='highlevel', jiraCfg=null, app, db;
 let donutFilter=null;
+let dashConfig={name:'BTS Readiness Dashboard', btsDate:'2026-08-01'};
+
+
+window.openDashSettings=function(){
+  document.getElementById('cfg-name').value=dashConfig.name||'BTS Readiness Dashboard';
+  document.getElementById('cfg-date').value=dashConfig.btsDate||'2026-08-01';
+  document.getElementById('dash-settings-overlay').style.display='flex';
+};
+
+window.saveDashSettings=async function(){
+  const name=document.getElementById('cfg-name').value.trim()||'BTS Readiness Dashboard';
+  const date=document.getElementById('cfg-date').value||'2026-08-01';
+  dashConfig={name,btsDate:date};
+  await saveDashConfig();
+  applyDashConfig();
+  closeOverlay('dash-settings-overlay');
+  stampSaved('Settings saved');
+};
+
+function applyDashConfig(){
+  const name=dashConfig.name||'BTS Readiness Dashboard';
+  const dateStr=dashConfig.btsDate||'2026-08-01';
+  const d=getBTSDate();
+  const formatted=d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  // update all references
+  const titleEl=document.getElementById('dash-title'); if(titleEl) titleEl.textContent=name;
+  document.title=name;
+  const footerEl=document.getElementById('footer-bts-txt'); if(footerEl) footerEl.textContent=`${name} · target ${formatted}`;
+  const dateEl=document.getElementById('m-bts-date'); if(dateEl) dateEl.textContent=formatted;
+  updateTopbar();
+}
 
 async function init(){
   try{
@@ -435,12 +484,18 @@ async function init(){
 }
 
 async function loadRows(){
+  // load config
+  try{
+    const cfgDoc=await getDocs(collection(db,'config'));
+    cfgDoc.docs.forEach(d=>{ if(d.id==='dashboard') dashConfig={...dashConfig,...d.data()}; });
+  }catch(e){}
   const snap=await getDocs(collection(db,'workstreams'));
   if(snap.empty){ rows=SEED.map(r=>({...r,tickets:[]})); await saveAll(); }
   else{ rows=snap.docs.map(d=>({tickets:[],...d.data(),id:d.id})); rows.sort((a,b)=>a.order-b.order); }
-  render(); stampSaved('Loaded from Firestore');
+  applyDashConfig(); render(); stampSaved('Loaded from Firestore');
 }
 async function saveAll(){ for(const r of rows) await setDoc(doc(db,'workstreams',r.id),r); stampSaved('Saved to Firestore'); }
+async function saveDashConfig(){ if(db) await setDoc(doc(db,'config','dashboard'),dashConfig); }
 async function deleteRowById(id){ rows=rows.filter(r=>r.id!==id); if(db) await deleteDoc(doc(db,'workstreams',id)); render(); stampSaved('Row deleted'); }
 window.deleteRow=deleteRowById;
 
@@ -899,6 +954,7 @@ window.checkPassword=function(){
     document.getElementById('jira-sync-btn').style.display='inline-flex';
     document.getElementById('jira-cfg-btn').style.display='inline-flex';
     document.getElementById('vt-jira').style.display='inline-block';
+    document.getElementById('dash-settings-btn').style.display='inline-flex';
     render();
   }else{ document.getElementById('auth-error').style.display='block'; document.getElementById('auth-input').value=''; document.getElementById('auth-input').focus(); }
 };
@@ -910,6 +966,7 @@ window.toggleAdminMode=function(){
     document.getElementById('jira-sync-btn').style.display='none';
     document.getElementById('jira-cfg-btn').style.display='none';
     document.getElementById('vt-jira').style.display='none';
+    document.getElementById('dash-settings-btn').style.display='none';
     if(activeView==='jira'){ activeView='highlevel'; document.querySelectorAll('.vt-btn').forEach((b,i)=>b.classList.toggle('active',i===0)); }
     render();
   }else{
@@ -963,8 +1020,8 @@ window.showDetail=function(id){
 };
 
 /* ── HELPERS ── */
-function weeksOut(){ return Math.max(0,Math.ceil((BTS_DATE-new Date())/(1000*60*60*24*7))); }
-function daysOut(){  return Math.max(0,Math.ceil((BTS_DATE-new Date())/(1000*60*60*24))); }
+function weeksOut(){ return Math.max(0,Math.ceil((getBTSDate()-new Date())/(1000*60*60*24*7))); }
+function daysOut(){  return Math.max(0,Math.ceil((getBTSDate()-new Date())/(1000*60*60*24))); }
 function stampSaved(msg){ const n=new Date(); document.getElementById('last-saved').textContent=(msg||'Saved')+' · '+n.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' at '+n.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); }
 function updateTopbar(){ const w=weeksOut(),c=document.getElementById('weeks-chip'); c.textContent=w+' weeks out'; if(w<=8) c.classList.add('urgent'); document.getElementById('date-chip').textContent=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
 function updateMetrics(){
