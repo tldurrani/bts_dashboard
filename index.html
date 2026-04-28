@@ -110,8 +110,7 @@ html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var
 .sl-milestone{position:absolute;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;border:2px solid var(--bg);}
 .sl-dl-lbl{position:absolute;bottom:2px;font-size:9px;color:var(--text3);transform:translateX(-50%);white-space:nowrap;font-family:var(--mono);}
 .sl-pct{position:absolute;right:-32px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--text3);font-family:var(--mono);width:28px;text-align:right;}
-.sl-tooltip{position:absolute;top:-28px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border2);color:var(--text);font-size:11px;font-family:var(--mono);padding:3px 8px;border-radius:4px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:50;}
-.sl-track:hover .sl-tooltip{opacity:1;}
+.sl-tooltip{position:fixed;background:var(--bg2);border:1px solid var(--accent-border);color:var(--text);font-size:12px;font-family:var(--mono);padding:4px 10px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:9999;display:none;box-shadow:0 2px 8px rgba(0,0,0,.4);}
 .sl-row:hover .sl-track-bg{background:var(--bg2);}
 .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;font-size:11px;color:var(--text3);}
 .leg{display:flex;align-items:center;gap:5px;}
@@ -490,6 +489,25 @@ function isoToDeadline(iso){
   if(isNaN(d)) return iso;
   return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 }
+
+window.showBarTip=function(e, text){
+  const t=document.getElementById('bar-tooltip');
+  if(!t) return;
+  t.textContent=text;
+  t.style.display='block';
+  t.style.left=(e.clientX+12)+'px';
+  t.style.top=(e.clientY-32)+'px';
+};
+window.moveBarTip=function(e){
+  const t=document.getElementById('bar-tooltip');
+  if(!t) return;
+  t.style.left=(e.clientX+12)+'px';
+  t.style.top=(e.clientY-32)+'px';
+};
+window.hideBarTip=function(){
+  const t=document.getElementById('bar-tooltip');
+  if(t) t.style.display='none';
+};
 
 async function init(){
   try{
@@ -1136,7 +1154,7 @@ function buildSwimlane(){
         <div class="sl-owner">${esc(r.owner)}</div>
         ${tks.length?`<div class="sl-tickets-mini">${mini}${more}</div>`:''}
       </div>
-      <div class="sl-track">
+      <div class="sl-track" onmouseenter="showBarTip(event,'${r.progress}% complete')" onmousemove="moveBarTip(event)" onmouseleave="hideBarTip()">
         <div class="sl-track-bg"></div>
         <div class="sl-track-fill" style="width:${r.progress}%;background:${color};"></div>
         ${i===0?`<div class="sl-today" style="left:${tp}%"><div class="sl-today-lbl" style="left:${tp<60?'4px':'-40px'}">today</div></div>`:`<div class="sl-today" style="left:${tp}%"></div>`}
