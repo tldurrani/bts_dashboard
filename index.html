@@ -172,6 +172,15 @@ td{padding:10px 12px;vertical-align:top;color:var(--text);}
 .tbl-tickets{display:flex;flex-wrap:wrap;gap:3px;}
 .tbl-ticket{font-size:10px;font-family:var(--mono);padding:1px 6px;border-radius:3px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-border);text-decoration:none;white-space:nowrap;}
 .tbl-ticket:hover{background:#112244;}
+.tbl-ticket-wrap{display:flex;flex-wrap:wrap;gap:3px;align-items:center;}
+.tbl-ticket-item{display:inline-flex;align-items:center;gap:3px;background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:3px;padding:1px 4px;}
+.tbl-ticket-item a{font-size:10px;font-family:var(--mono);color:var(--accent);text-decoration:none;}
+.tbl-ticket-item a:hover{text-decoration:underline;}
+.tbl-ticket-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:10px;padding:0 1px;line-height:1;}
+.tbl-ticket-del:hover{color:var(--red);}
+.tbl-ticket-input{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:2px 6px;font-size:11px;font-family:var(--mono);width:90px;margin-top:3px;}
+.tbl-ticket-input:focus{outline:none;border-color:var(--accent);}
+.tbl-ticket-input::placeholder{color:var(--text3);}
 
 /* jira tab */
 .jira-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px 20px;margin-bottom:14px;}
@@ -726,11 +735,66 @@ window.addTicketToRow=async function(rowId){
 };
 
 const ticketPlaceholder='ENG-123';
+
+window.addTicketFromTable=async function(rowId, rawVal){
+  if(!rawVal||!rawVal.trim()) return;
+  // strip URL to bare key
+  let v = rawVal.trim();
+  if(v.includes('://') || v.includes('/browse/')){
+    const parts = v.split('/').filter(Boolean);
+    v = parts[parts.length-1] || v;
+  }
+  const key = v.toUpperCase().split('?')[0].split('#')[0].trim();
+  if(!key) return;
+
+  const row=rows.find(r=>r.id===rowId);
+  if(!row) return;
+  if((row.tickets||[]).find(t=>t.key===key)) return;
+
+  let ticket={key,summary:'',status:'',statusCategory:'',assignee:'',priority:'',url:`${JIRA_BASE}/browse/${key}`};
+  if(jiraCfg){
+    try{
+      const d=await jiraFetch(`issue/${key}?fields=summary,status,assignee,priority`);
+      ticket={key,
+        summary:d.fields?.summary||'',
+        status:d.fields?.status?.name||'',
+        statusCategory:d.fields?.status?.statusCategory?.key||'',
+        assignee:d.fields?.assignee?.displayName||'Unassigned',
+        priority:d.fields?.priority?.name||'',
+        url:`${JIRA_BASE}/browse/${key}`
+      };
+    }catch(e){}
+  }
+  row.tickets=[...(row.tickets||[]),ticket];
+  try{ if(db) await setDoc(doc(db,'workstreams',rowId),row); }catch(e){ console.error(e); }
+  updateMetrics();
+  // refresh just the ticket wrap in the table row without full re-render
+  const wrap=document.getElementById('tbl-tks-'+rowId);
+  if(wrap){
+    const item=document.createElement('div');
+    item.className='tbl-ticket-item';
+    item.innerHTML=`<a href="${ticket.url}" target="_blank" onclick="event.stopPropagation()">${ticket.key}</a><button class="tbl-ticket-del" onclick="event.stopPropagation();removeTicket('${rowId}','${ticket.key}')" title="Remove">✕</button>`;
+    wrap.appendChild(item);
+  }
+  // also update metric count
+  document.getElementById('m-tickets').textContent=rows.reduce((a,r)=>a+(r.tickets||[]).length,0);
+};
 window.removeTicket=async function(rowId,key){
   const row=rows.find(r=>r.id===rowId); if(!row) return;
   row.tickets=(row.tickets||[]).filter(t=>t.key!==key);
-  if(db) await setDoc(doc(db,'workstreams',rowId),row);
-  updateMetrics(); render();
+  try{ if(db) await setDoc(doc(db,'workstreams',rowId),row); }catch(e){ console.error(e); }
+  updateMetrics();
+  document.getElementById('m-tickets').textContent=rows.reduce((a,r)=>a+(r.tickets||[]).length,0);
+  // remove chip from table without full re-render
+  const wrap=document.getElementById('tbl-tks-'+rowId);
+  if(wrap){
+    [...wrap.querySelectorAll('.tbl-ticket-item')].forEach(el=>{
+      if(el.querySelector('a')?.textContent===key) el.remove();
+    });
+  }
+  // also refresh detail drawer if open
+  const drawer=document.getElementById('detail-drawer');
+  if(drawer&&drawer.style.display!=='none') showDetail(rowId);
 };
 
 /* ── AUTH ── */
@@ -961,7 +1025,18 @@ function renderDetailed(){
       <td><input class="progress-input" data-f="progress" type="number" min="0" max="100" value="${r.progress}"/>%</td>
       <td><textarea class="editable" data-f="path" rows="2">${esc(r.path)}</textarea></td>
       <td><textarea class="editable" data-f="next" rows="2">${esc(r.next)}</textarea></td>
-      <td><div class="tbl-tickets" style="margin-bottom:4px;">${chips}</div><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();showDetail('${r.id}')">+ link</button></td>
+      <td>
+        <div class="tbl-ticket-wrap" id="tbl-tks-${r.id}">
+          ${tks.map(t=>`
+            <div class="tbl-ticket-item">
+              <a href="${t.url}" target="_blank" onclick="event.stopPropagation()">${t.key}</a>
+              <button class="tbl-ticket-del" onclick="event.stopPropagation();removeTicket('${r.id}','${t.key}')" title="Remove">✕</button>
+            </div>`).join('')}
+        </div>
+        <input class="tbl-ticket-input" id="tbl-tk-inp-${r.id}" placeholder="ENG-123"
+          onclick="event.stopPropagation()"
+          onkeydown="if(event.key==='Enter'){event.stopPropagation();addTicketFromTable('${r.id}',this.value);this.value='';}"/>
+      </td>
       <td><button class="del-btn" onclick="deleteRow('${r.id}')">✕</button></td>`:`
       <td>${esc(r.activity)}</td>
       <td>${esc(r.owner)}</td>
@@ -971,7 +1046,11 @@ function renderDetailed(){
       <td style="font-family:var(--mono)">${r.progress}%</td>
       <td style="color:var(--text2);font-size:12px;">${esc(r.path)}</td>
       <td style="color:var(--text2);font-size:12px;">${esc(r.next)}</td>
-      <td><div class="tbl-tickets">${chips||'<span style="font-size:11px;color:var(--text3);">—</span>'}</div></td>
+      <td>
+        <div class="tbl-ticket-wrap">
+          ${tks.length ? tks.map(t=>`<div class="tbl-ticket-item"><a href="${t.url}" target="_blank" onclick="event.stopPropagation()">${t.key}</a></div>`).join('') : '<span style="font-size:11px;color:var(--text3);">—</span>'}
+        </div>
+      </td>
       <td></td>`;
     return `<tr data-id="${r.id}"><td><span class="ws-badge ${r.wsBadge}">${r.workstream}</span></td>${cells}</tr>`;
   }).join('');
