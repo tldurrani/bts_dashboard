@@ -448,17 +448,19 @@ async function fetchProjectTickets(key){
 }
 
 async function fetchByMappingType(m){
+  // If a custom JQL filter is set, use it directly
+  // Otherwise build a default JQL based on type
   let jql;
-  if(!m.type||m.type==='project'){
-    jql=`project=${m.key} AND labels=BTS AND statusCategory != Done ORDER BY updated DESC`;
-  } else if(m.type==='epic'){
-    jql=`"Epic Link"=${m.key} AND statusCategory != Done ORDER BY updated DESC`;
+  if(m.jql && m.jql.trim()){
+    jql = m.jql.trim();
   } else if(m.type==='label'){
     jql=`labels="${m.key}" AND statusCategory != Done ORDER BY updated DESC`;
+  } else if(m.type==='epic'){
+    jql=`"Epic Link"=${m.key} AND statusCategory != Done ORDER BY updated DESC`;
   } else {
-    jql=`project=${m.key} AND statusCategory != Done ORDER BY updated DESC`;
+    jql=`project=${m.key} AND labels=BTS AND statusCategory != Done ORDER BY updated DESC`;
   }
-  const data=await jiraFetch(`search/jql?jql=${encodeURIComponent(jql)}&maxResults=50&fields=summary,status,assignee,priority`);
+  const data=await jiraFetch(`search/jql?jql=${encodeURIComponent(jql)}&maxResults=100&fields=summary,status,assignee,priority,labels`);
   return (data.issues||[]).map(i=>({key:i.key,summary:i.fields.summary||'',status:i.fields.status?.name||'',statusCategory:i.fields.status?.statusCategory?.key||'',assignee:i.fields.assignee?.displayName||'Unassigned',priority:i.fields.priority?.name||'',url:`${JIRA_BASE}/browse/${i.key}`}));
 }
 
@@ -517,26 +519,35 @@ function renderMappings(maps){
                 <option value="epic" ${m.type==='epic'?'selected':''}>EPIC</option>
                 <option value="label" ${m.type==='label'?'selected':''}>LABEL</option>
               </select>
-              <input class="mapping-key" placeholder="e.g. ENG" value="${esc(m.key)}" style="width:90px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--mono);"/>
+              <input class="mapping-key" placeholder="e.g. ENG" value="${esc(m.key)}" style="width:80px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--mono);"/>
               <input type="hidden" class="mapping-name" value=""/>`
           }
           <span style="color:var(--text3);font-size:12px;flex-shrink:0;">→</span>
-          <select class="mapping-ws" style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--font);">
+          <select class="mapping-ws" style="flex:1;min-width:100px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--font);">
             ${[...new Set(rows.map(r=>r.workstream))].map(w=>`<option value="${esc(w)}" ${m.workstream===w?'selected':''}>${esc(w)}</option>`).join('')}
           </select>
           <button class="mapping-del" onclick="removeMapping(${i})">✕</button>
+        </div>
+        <div style="margin:-4px 0 6px 0;padding:0 2px;">
+          <input class="mapping-jql" placeholder="Custom JQL filter (optional) — e.g. labels=BTS AND priority=High" value="${esc(m.jql||'')}"
+            style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 10px;font-size:11px;font-family:var(--mono);"
+            title="Leave blank to use default filter for this type"/>
         </div>`;
       }).join('')
     : '<div style="font-size:12px;color:var(--text3);padding:8px 0;">No mappings yet. Use Browse Jira or add manually.</div>';
 }
 
 function getMappings(){
-  return [...document.querySelectorAll('#mapping-list .mapping-row')].map(r=>({
-    key: (r.querySelector('.mapping-key')?.value||'').trim().toUpperCase(),
-    type: (r.querySelector('.mapping-type')?.value||'project').trim(),
-    name: (r.querySelector('.mapping-name')?.value||'').trim(),
-    workstream: (r.querySelector('.mapping-ws')?.value||'').trim()
-  })).filter(m=>m.key&&m.workstream);
+  return [...document.querySelectorAll('#mapping-list .mapping-row')].map(r=>{
+    const jqlInput = r.nextElementSibling?.querySelector('.mapping-jql');
+    return {
+      key: (r.querySelector('.mapping-key')?.value||'').trim().toUpperCase(),
+      type: (r.querySelector('.mapping-type')?.value||'project').trim(),
+      name: (r.querySelector('.mapping-name')?.value||'').trim(),
+      workstream: (r.querySelector('.mapping-ws')?.value||'').trim(),
+      jql: (jqlInput?.value||'').trim()
+    };
+  }).filter(m=>m.key&&m.workstream);
 }
 
 window.addMapping=function(){
@@ -658,7 +669,14 @@ window.closeBrowser=function(){
 
 window.addTicketToRow=async function(rowId){
   const inp=document.getElementById('ticket-input-'+rowId);
-  const key=(inp?.value||'').trim().toUpperCase();
+  // Accept full URL or bare key — extract just the ticket key either way
+  let rawVal = (inp?.value||'').trim();
+  // If it looks like a URL, pull out the last path segment
+  if(rawVal.includes('://') || rawVal.includes('/browse/')){
+    const parts = rawVal.split('/').filter(Boolean);
+    rawVal = parts[parts.length-1] || rawVal;
+  }
+  const key = rawVal.toUpperCase().split('?')[0].split('#')[0].trim();
   if(!key){ if(inp) inp.focus(); return; }
 
   const row=rows.find(r=>r.id===rowId);
