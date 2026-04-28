@@ -110,6 +110,8 @@ html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var
 .sl-milestone{position:absolute;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;border:2px solid var(--bg);}
 .sl-dl-lbl{position:absolute;bottom:2px;font-size:9px;color:var(--text3);transform:translateX(-50%);white-space:nowrap;font-family:var(--mono);}
 .sl-pct{position:absolute;right:-32px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--text3);font-family:var(--mono);width:28px;text-align:right;}
+.sl-tooltip{position:absolute;top:-28px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border2);color:var(--text);font-size:11px;font-family:var(--mono);padding:3px 8px;border-radius:4px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:50;}
+.sl-track:hover .sl-tooltip{opacity:1;}
 .sl-row:hover .sl-track-bg{background:var(--bg2);}
 .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;font-size:11px;color:var(--text3);}
 .leg{display:flex;align-items:center;gap:5px;}
@@ -469,6 +471,24 @@ function applyDashConfig(){
   const daysEl=document.getElementById('m-days'); if(daysEl) daysEl.textContent=daysOut();
   const weeksEl=document.getElementById('m-weeks'); if(weeksEl) weeksEl.textContent=weeksOut();
   updateTopbar();
+}
+
+
+function deadlineToISO(dl){
+  // convert "Jul 11" or "Aug 1" to "2026-07-11"
+  const mo={Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+  if(!dl||!dl.includes(' ')) return '';
+  const [m,d]=dl.split(' ');
+  const mon=mo[m]; if(!mon) return '';
+  return `2026-${mon}-${d.padStart(2,'0')}`;
+}
+
+function isoToDeadline(iso){
+  // convert "2026-07-11" to "Jul 11"
+  if(!iso) return '';
+  const d=new Date(iso+'T00:00:00');
+  if(isNaN(d)) return iso;
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 }
 
 async function init(){
@@ -984,7 +1004,8 @@ window.saveChanges=async function(){
   document.querySelectorAll('#tbl-body tr[data-id]').forEach(tr=>{
     const row=rows.find(r=>r.id===tr.dataset.id); if(!row) return;
     row.activity=tr.querySelector('[data-f="activity"]').value; row.owner=tr.querySelector('[data-f="owner"]').value;
-    row.deadline=tr.querySelector('[data-f="deadline"]').value; row.status=tr.querySelector('[data-f="status"]').value;
+    const dlVal=tr.querySelector('[data-f="deadline"]').value;
+    row.deadline=dlVal?isoToDeadline(dlVal):row.deadline; row.status=tr.querySelector('[data-f="status"]').value;
     row.progress=parseInt(tr.querySelector('[data-f="progress"]').value)||0;
     row.path=tr.querySelector('[data-f="path"]').value; row.next=tr.querySelector('[data-f="next"]').value;
   });
@@ -1044,16 +1065,21 @@ function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
 function buildDonut(g,y,r){
   const total=g+y+r||1;
   const R=68, C=2*Math.PI*R;
-  const gPct=g/total, yPct=y/total, rPct=r/total;
-  const gDash=gPct*C, yDash=yPct*C, rDash=rPct*C;
-  const gOff=0, yOff=C-gDash, rOff=C-gDash-yDash;
+  // Calculate avg progress per status group for richer center display
   const avg=rows.length?Math.round(rows.reduce((a,r)=>a+r.progress,0)/rows.length):0;
   const f=donutFilter;
-  const gCls=`donut-seg${f==='green'?' active':f?'  dimmed':''}`;
+  const gCls=`donut-seg${f==='green'?' active':f?' dimmed':''}`;
   const yCls=`donut-seg${f==='yellow'?' active':f?' dimmed':''}`;
   const rCls=`donut-seg${f==='red'?' active':f?' dimmed':''}`;
   const centerLabel = f ? {green:'On track',yellow:'At risk',red:'Blocked'}[f] : 'readiness';
   const centerVal   = f ? {green:g,yellow:y,red:r}[f] : avg+'%';
+  // SVG donut segments — each circle is a full ring with dasharray to show only its slice
+  // strokeDashoffset rotates the start point: green starts at top (0), yellow follows, red follows
+  const gDash=g/total*C, yDash=y/total*C, rDash=r/total*C;
+  // offset: negative offset moves start clockwise. Start green at 0, yellow after green, red after yellow
+  const gOff = 0;
+  const yOff = -(gDash);          // yellow starts where green ends
+  const rOff = -(gDash + yDash);  // red starts where yellow ends
   return `
     <div class="donut-panel">
       <div class="donut-title" style="display:flex;align-items:center;justify-content:space-between;">
@@ -1063,9 +1089,9 @@ function buildDonut(g,y,r){
       <div class="donut-wrap">
         <svg width="160" height="160" viewBox="0 0 160 160" style="cursor:pointer;">
           <circle cx="80" cy="80" r="${R}" fill="none" stroke="#1c1f23" stroke-width="16"/>
-          ${g>0?`<circle class="${gCls}" cx="80" cy="80" r="${R}" fill="none" stroke="#4a9660" stroke-width="16" stroke-dasharray="${gDash} ${C-gDash}" stroke-dashoffset="${-gOff}" onclick="setDonutFilter('green')"><title>On track: ${g} workstream${g!==1?'s':''}</title></circle>`:''}
-          ${y>0?`<circle class="${yCls}" cx="80" cy="80" r="${R}" fill="none" stroke="#c49a3c" stroke-width="16" stroke-dasharray="${yDash} ${C-yDash}" stroke-dashoffset="${-yOff}" onclick="setDonutFilter('yellow')"><title>At risk: ${y} workstream${y!==1?'s':''}</title></circle>`:''}
-          ${r>0?`<circle class="${rCls}" cx="80" cy="80" r="${R}" fill="none" stroke="#b85c5c" stroke-width="16" stroke-dasharray="${rDash} ${C-rDash}" stroke-dashoffset="${-rOff}" onclick="setDonutFilter('red')"><title>Blocked: ${r} workstream${r!==1?'s':''}</title></circle>`:''}
+          ${g>0?`<circle class="${gCls}" cx="80" cy="80" r="${R}" fill="none" stroke="#4a9660" stroke-width="16" stroke-dasharray="${gDash} ${C-gDash}" stroke-dashoffset="${gOff}" onclick="setDonutFilter('green')"><title>On track: ${g} workstream${g!==1?'s':''} · avg ${Math.round(rows.filter(r=>r.status==='green').reduce((a,r)=>a+r.progress,0)/(g||1))}% complete</title></circle>`:''}
+          ${y>0?`<circle class="${yCls}" cx="80" cy="80" r="${R}" fill="none" stroke="#c49a3c" stroke-width="16" stroke-dasharray="${yDash} ${C-yDash}" stroke-dashoffset="${yOff}" onclick="setDonutFilter('yellow')"><title>At risk: ${y} workstream${y!==1?'s':''} · avg ${Math.round(rows.filter(r=>r.status==='yellow').reduce((a,r)=>a+r.progress,0)/(y||1))}% complete</title></circle>`:''}
+          ${r>0?`<circle class="${rCls}" cx="80" cy="80" r="${R}" fill="none" stroke="#b85c5c" stroke-width="16" stroke-dasharray="${rDash} ${C-rDash}" stroke-dashoffset="${rOff}" onclick="setDonutFilter('red')"><title>Blocked: ${r} workstream${r!==1?'s':''} · avg ${Math.round(rows.filter(r=>r.status==='red').reduce((a,r)=>a+r.progress,0)/(r||1))}% complete</title></circle>`:''}
         </svg>
         <div class="donut-center" style="pointer-events:none;">
           <div class="donut-pct" style="${f==='green'?'color:var(--green)':f==='yellow'?'color:var(--yellow)':f==='red'?'color:var(--red)':''}">${centerVal}</div>
@@ -1077,6 +1103,7 @@ function buildDonut(g,y,r){
         <div class="donut-leg-row${f==='yellow'?' active':''}" onclick="setDonutFilter('yellow')"><div class="donut-leg-left"><span class="donut-leg-dot" style="background:var(--yellow)"></span><span class="donut-leg-label">At risk</span></div><span class="donut-leg-count" style="${f==='yellow'?'color:var(--yellow)':''}">${y}</span></div>
         <div class="donut-leg-row${f==='red'?' active':''}" onclick="setDonutFilter('red')"><div class="donut-leg-left"><span class="donut-leg-dot" style="background:var(--red)"></span><span class="donut-leg-label">Blocked</span></div><span class="donut-leg-count" style="${f==='red'?'color:var(--red)':''}">${r}</span></div>
         <div class="donut-divider"></div>
+        <div class="donut-leg-row" style="cursor:default;"><div class="donut-leg-left"><span class="donut-leg-label" style="color:var(--text3);font-size:10px;" title="Average of all Progress % values in the detailed table">Health = avg progress %</span></div></div>
         <div class="donut-leg-row" style="cursor:default;" onclick="setDonutFilter(null)"><div class="donut-leg-left"><span class="donut-leg-label" style="color:var(--text3)">Total workstreams</span></div><span class="donut-leg-count">${total}</span></div>
         <div class="donut-leg-row" style="cursor:default;"><div class="donut-leg-left"><span class="donut-leg-label" style="color:var(--text3)">Jira tickets</span></div><span class="donut-leg-count" style="color:var(--accent)">${rows.reduce((a,r)=>a+(r.tickets||[]).length,0)}</span></div>
       </div>
@@ -1161,7 +1188,7 @@ function renderDetailed(){
     const cells=isAdmin?`
       <td><input class="editable" data-f="activity" value="${esc(r.activity)}"/></td>
       <td><input class="editable" data-f="owner" value="${esc(r.owner)}"/></td>
-      <td><input class="editable" data-f="deadline" value="${esc(r.deadline)}" style="width:70px"/></td>
+      <td><input class="editable" data-f="deadline" type="date" value="${deadlineToISO(r.deadline)}" style="width:130px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 6px;font-size:12px;font-family:var(--font);" onchange="this.dataset.changed='1'"/></td>
       <td><select class="status-select ${sc[r.status]}" data-f="status" onchange="this.className='status-select '+{green:'g',yellow:'y',red:'r'}[this.value]">
         <option value="green" ${r.status==='green'?'selected':''}>On track</option>
         <option value="yellow" ${r.status==='yellow'?'selected':''}>At risk</option>
