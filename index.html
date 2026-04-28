@@ -457,7 +457,7 @@ const SEED = [
 
 let rows=[], isAdmin=false, activeView='highlevel', jiraCfg=null, app, db;
 let sortCol=null, sortDir='asc';
-let colFilters={workstream:'',activity:'',owner:'',status:'',risk:''};
+let colFilters={status:''};
 let pendingRows=null; // snapshot for cancel
 let donutFilter=null;
 let dashConfig={name:'BTS Readiness Dashboard', btsDate:'2026-08-01'};
@@ -1170,7 +1170,7 @@ window.showDetail=function(id){
       <div><div class="df-label">Deadline</div><div class="df-val" style="font-family:var(--mono)">${esc(row.deadline)}</div></div>
       <div><div class="df-label">Status</div><div class="df-val" style="color:${sc[row.status]};font-weight:500;">${sl[row.status]}</div></div>
       <div><div class="df-label">Progress</div><div class="df-val">${row.progress}%</div></div>
-      <div><div class="df-label">Risk</div><div class="df-val"><span class="risk-pill risk-${row.risk||'low'}" style="border:1px solid">${(row.risk||'low').charAt(0).toUpperCase()+(row.risk||'low').slice(1)}</span></div></div>
+      <div class="df-full"><div class="df-label">Risk</div><div class="df-val" style="color:var(--text2)">${esc(row.risk)||'—'}</div></div>
       <div class="df-full"><div class="df-label">Path to green</div><div class="df-val">${esc(row.path)||'—'}</div></div>
       <div class="df-full"><div class="df-label">Next steps</div><div class="df-val">${esc(row.next)||'—'}</div></div>
     </div>
@@ -1319,17 +1319,25 @@ function renderHighLevel(){
     </div>`;
 }
 
+function deadlineSortVal(dl){
+  // convert "Jul 11" or "Aug 1" to a sortable number YYYYMMDD
+  const mo={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+  if(!dl||!dl.includes(' ')) return 99999999;
+  const [m,d]=dl.split(' ');
+  return (2026*10000)+(mo[m]||0)*100+parseInt(d||0);
+}
+
 function getFilteredSortedRows(){
   let result=[...rows];
-  // apply column filters
-  if(colFilters.workstream) result=result.filter(r=>r.workstream.toLowerCase().includes(colFilters.workstream.toLowerCase()));
-  if(colFilters.activity) result=result.filter(r=>(r.activity||'').toLowerCase().includes(colFilters.activity.toLowerCase()));
-  if(colFilters.owner) result=result.filter(r=>(r.owner||'').toLowerCase().includes(colFilters.owner.toLowerCase()));
+  // apply column filters (status only — text filters removed)
   if(colFilters.status) result=result.filter(r=>r.status===colFilters.status);
-  if(colFilters.risk) result=result.filter(r=>(r.risk||'low')===colFilters.risk);
   // apply sort
   if(sortCol){
     result.sort((a,b)=>{
+      if(sortCol==='deadline'){
+        const av=deadlineSortVal(a.deadline), bv=deadlineSortVal(b.deadline);
+        return sortDir==='asc'?av-bv:bv-av;
+      }
       let av=a[sortCol]||'', bv=b[sortCol]||'';
       if(typeof av==='number') return sortDir==='asc'?av-bv:bv-av;
       return sortDir==='asc'?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
@@ -1344,37 +1352,26 @@ function renderDetailed(){
 
   function thSort(col,label){
     const active=sortCol===col;
-    const dir=active?sortDir:'';
     return `<th class="${active?'sorted':''}" style="white-space:nowrap;">
-      <div class="th-wrap" onclick="setSort('${col}')">
+      <div class="th-wrap" onclick="setSort('${col}')" style="cursor:pointer;user-select:none;">
         <span>${label}</span>
-        <span class="th-sort ${dir}">${active?(sortDir==='asc'?'↑':'↓'):''}</span>
+        <span style="font-size:10px;color:${active?'var(--accent)':'var(--text3)'};">${active?(sortDir==='asc'?'↑':'↓'):'↕'}</span>
       </div>
-      ${colFilters[col]!==undefined?`<input class="th-filter" placeholder="filter…" value="${esc(colFilters[col]||'')}" oninput="setColFilter('${col}',this.value)" onclick="event.stopPropagation()"/>`:''}
     </th>`;
   }
 
   function thStatusFilter(){
-    return `<th class="${sortCol==='status'?'sorted':''}">
-      <div class="th-wrap" onclick="setSort('status')"><span>Status</span><span class="th-sort ${sortCol==='status'?sortDir:''}">${sortCol==='status'?(sortDir==='asc'?'↑':'↓'):''}</span></div>
-      <select class="th-filter" onchange="setColFilter('status',this.value)" onclick="event.stopPropagation()">
-        <option value="">all</option>
+    const active=sortCol==='status';
+    return `<th class="${active?'sorted':''}" style="white-space:nowrap;">
+      <div class="th-wrap" style="cursor:pointer;user-select:none;margin-bottom:4px;" onclick="setSort('status')">
+        <span>Status</span>
+        <span style="font-size:10px;color:${active?'var(--accent)':'var(--text3)'};">${active?(sortDir==='asc'?'↑':'↓'):'↕'}</span>
+      </div>
+      <select class="th-filter" onchange="setColFilter('status',this.value)" onclick="event.stopPropagation()" style="width:100%;">
+        <option value="">All</option>
         <option value="green" ${colFilters.status==='green'?'selected':''}>On track</option>
         <option value="yellow" ${colFilters.status==='yellow'?'selected':''}>At risk</option>
         <option value="red" ${colFilters.status==='red'?'selected':''}>Blocked</option>
-      </select>
-    </th>`;
-  }
-
-  function thRiskFilter(){
-    return `<th class="${sortCol==='risk'?'sorted':''}">
-      <div class="th-wrap" onclick="setSort('risk')"><span>Risk</span><span class="th-sort ${sortCol==='risk'?sortDir:''}">${sortCol==='risk'?(sortDir==='asc'?'↑':'↓'):''}</span></div>
-      <select class="th-filter" onchange="setColFilter('risk',this.value)" onclick="event.stopPropagation()">
-        <option value="">all</option>
-        <option value="low" ${colFilters.risk==='low'?'selected':''}>Low</option>
-        <option value="medium" ${colFilters.risk==='medium'?'selected':''}>Medium</option>
-        <option value="high" ${colFilters.risk==='high'?'selected':''}>High</option>
-        <option value="critical" ${colFilters.risk==='critical'?'selected':''}>Critical</option>
       </select>
     </th>`;
   }
@@ -1396,12 +1393,7 @@ function renderDetailed(){
         <option value="yellow" ${r.status==='yellow'?'selected':''}>At risk</option>
         <option value="red" ${r.status==='red'?'selected':''}>Blocked</option>
       </select></td>
-      <td><select class="risk-select risk-${r.risk||'low'}" data-f="risk" onchange="this.className='risk-select risk-'+this.value">
-        <option value="low" ${(r.risk||'low')==='low'?'selected':''}>Low</option>
-        <option value="medium" ${r.risk==='medium'?'selected':''}>Medium</option>
-        <option value="high" ${r.risk==='high'?'selected':''}>High</option>
-        <option value="critical" ${r.risk==='critical'?'selected':''}>Critical</option>
-      </select></td>
+      <td><textarea class="editable" data-f="risk" rows="2" placeholder="Describe risk…">${esc(r.risk||'')}</textarea></td>
       <td><input class="progress-input" data-f="progress" type="number" min="0" max="100" value="${r.progress}"/>%</td>
       <td><textarea class="editable" data-f="path" rows="2">${esc(r.path)}</textarea></td>
       <td><textarea class="editable" data-f="next" rows="2">${esc(r.next)}</textarea></td>
@@ -1421,7 +1413,7 @@ function renderDetailed(){
       <td>${esc(r.owner)}</td>
       <td style="font-family:var(--mono);font-size:12px;white-space:nowrap;">${esc(r.deadline)}</td>
       <td><span class="status-pill ${sc[r.status]}">${sl[r.status]}</span></td>
-      <td><span class="risk-pill risk-${r.risk||'low'}" style="border:1px solid">${(r.risk||'low').charAt(0).toUpperCase()+(r.risk||'low').slice(1)}</span></td>
+      <td style="color:var(--text2);font-size:12px;">${esc(r.risk||'—')}</td>
       <td style="font-family:var(--mono)">${r.progress}%</td>
       <td style="color:var(--text2);font-size:12px;">${esc(r.path)}</td>
       <td style="color:var(--text2);font-size:12px;">${esc(r.next)}</td>
@@ -1455,10 +1447,10 @@ function renderDetailed(){
         ${thSort('workstream','Workstream')}
         ${thSort('activity','Activity')}
         ${thSort('owner','Owner')}
-        <th>Deadline</th>
+        ${thSort('deadline','Deadline')}
         ${thStatusFilter()}
-        ${thRiskFilter()}
-        <th><div class="th-wrap" onclick="setSort('progress')"><span>%</span><span class="th-sort ${sortCol==='progress'?sortDir:''}">${sortCol==='progress'?(sortDir==='asc'?'↑':'↓'):''}</span></div></th>
+        <th>Risk</th>
+        <th><div class="th-wrap" onclick="setSort('progress')" style="cursor:pointer;user-select:none;"><span>%</span><span style="font-size:10px;color:${sortCol==='progress'?'var(--accent)':'var(--text3)'};">${sortCol==='progress'?(sortDir==='asc'?'↑':'↓'):'↕'}</span></div></th>
         <th>Path to green</th>
         <th>Next steps</th>
         <th>Jira tickets</th>
