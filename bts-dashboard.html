@@ -443,7 +443,7 @@ async function jiraFetch(path, cfg){
 }
 async function fetchProjectTickets(key){
   const jql=encodeURIComponent(`project=${key} AND labels=BTS AND statusCategory != Done ORDER BY updated DESC`);
-  const data=await jiraFetch(`search?jql=${jql}&maxResults=50&fields=summary,status,assignee,priority`);
+  const data=await jiraFetch(`search/jql?jql=${jql}&maxResults=50&fields=summary,status,assignee,priority`);
   return (data.issues||[]).map(i=>({key:i.key,summary:i.fields.summary||'',status:i.fields.status?.name||'',statusCategory:i.fields.status?.statusCategory?.key||'',assignee:i.fields.assignee?.displayName||'Unassigned',priority:i.fields.priority?.name||'',url:`${JIRA_BASE}/browse/${i.key}`}));
 }
 
@@ -458,7 +458,7 @@ async function fetchByMappingType(m){
   } else {
     jql=`project=${m.key} AND statusCategory != Done ORDER BY updated DESC`;
   }
-  const data=await jiraFetch(`search?jql=${encodeURIComponent(jql)}&maxResults=50&fields=summary,status,assignee,priority`);
+  const data=await jiraFetch(`search/jql?jql=${encodeURIComponent(jql)}&maxResults=50&fields=summary,status,assignee,priority`);
   return (data.issues||[]).map(i=>({key:i.key,summary:i.fields.summary||'',status:i.fields.status?.name||'',statusCategory:i.fields.status?.statusCategory?.key||'',assignee:i.fields.assignee?.displayName||'Unassigned',priority:i.fields.priority?.name||'',url:`${JIRA_BASE}/browse/${i.key}`}));
 }
 
@@ -500,34 +500,47 @@ window.openJiraSettings=function(){
 
 function renderMappings(maps){
   document.getElementById('mapping-list').innerHTML = maps.length
-    ? maps.map((m,i)=>`
-      <div class="mapping-row" data-i="${i}">
-        <span class="map-chip">
-          <span class="map-chip-type ${m.type||'project'}">${(m.type||'project').toUpperCase()}</span>
-          <span style="font-family:var(--mono);font-size:11px;color:var(--text)">${esc(m.key)}</span>
-          ${m.name?`<span style="font-size:11px;color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(m.name)}</span>`:''}
-        </span>
-        <span style="color:var(--text3);font-size:12px;flex-shrink:0;">→</span>
-        <input class="mapping-ws" placeholder="Engineering" value="${esc(m.workstream)}" style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--font);"/>
-        <input type="hidden" class="mapping-key" value="${esc(m.key)}"/>
-        <input type="hidden" class="mapping-type" value="${esc(m.type||'project')}"/>
-        <input type="hidden" class="mapping-name" value="${esc(m.name||'')}"/>
-        <button class="mapping-del" onclick="removeMapping(${i})">✕</button>
-      </div>`).join('')
+    ? maps.map((m,i)=>{
+        const fromBrowser = !!(m.name && m.key);
+        return `<div class="mapping-row" data-i="${i}" style="flex-wrap:wrap;gap:6px;">
+          ${fromBrowser
+            ? `<span class="map-chip">
+                <span class="map-chip-type ${m.type||'project'}">${(m.type||'project').toUpperCase()}</span>
+                <span style="font-family:var(--mono);font-size:11px;color:var(--text)">${esc(m.key)}</span>
+                ${m.name?`<span style="font-size:11px;color:var(--text3);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(m.name)}</span>`:''}
+              </span>
+              <input type="hidden" class="mapping-key" value="${esc(m.key)}"/>
+              <input type="hidden" class="mapping-type" value="${esc(m.type||'project')}"/>
+              <input type="hidden" class="mapping-name" value="${esc(m.name||'')}"/>`
+            : `<select class="mapping-type" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 6px;font-size:11px;font-family:var(--mono);width:90px;">
+                <option value="project" ${(m.type||'project')==='project'?'selected':''}>PROJECT</option>
+                <option value="epic" ${m.type==='epic'?'selected':''}>EPIC</option>
+                <option value="label" ${m.type==='label'?'selected':''}>LABEL</option>
+              </select>
+              <input class="mapping-key" placeholder="e.g. ENG" value="${esc(m.key)}" style="width:90px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--mono);"/>
+              <input type="hidden" class="mapping-name" value=""/>`
+          }
+          <span style="color:var(--text3);font-size:12px;flex-shrink:0;">→</span>
+          <select class="mapping-ws" style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--font);">
+            ${[...new Set(rows.map(r=>r.workstream))].map(w=>`<option value="${esc(w)}" ${m.workstream===w?'selected':''}>${esc(w)}</option>`).join('')}
+          </select>
+          <button class="mapping-del" onclick="removeMapping(${i})">✕</button>
+        </div>`;
+      }).join('')
     : '<div style="font-size:12px;color:var(--text3);padding:8px 0;">No mappings yet. Use Browse Jira or add manually.</div>';
 }
 
 function getMappings(){
   return [...document.querySelectorAll('#mapping-list .mapping-row')].map(r=>({
-    key: r.querySelector('.mapping-key').value.trim(),
-    type: r.querySelector('.mapping-type').value.trim()||'project',
-    name: r.querySelector('.mapping-name').value.trim(),
-    workstream: r.querySelector('.mapping-ws').value.trim()
-  }));
+    key: (r.querySelector('.mapping-key')?.value||'').trim().toUpperCase(),
+    type: (r.querySelector('.mapping-type')?.value||'project').trim(),
+    name: (r.querySelector('.mapping-name')?.value||'').trim(),
+    workstream: (r.querySelector('.mapping-ws')?.value||'').trim()
+  })).filter(m=>m.key&&m.workstream);
 }
 
 window.addMapping=function(){
-  const c=getMappings(); c.push({key:'',type:'project',name:'',workstream:''}); renderMappings(c);
+  const c=getMappings(); c.push({key:'',type:'project',name:'',workstream:rows[0]?.workstream||'Engineering'}); renderMappings(c);
 };
 window.removeMapping=function(i){ const c=getMappings(); c.splice(i,1); renderMappings(c); };
 
@@ -578,7 +591,7 @@ async function fetchProjects(cfg){
 
 async function fetchEpics(cfg){
   const jql=encodeURIComponent('issuetype=Epic ORDER BY updated DESC');
-  const d=await jiraFetch(`search?jql=${jql}&maxResults=100&fields=summary,project`,cfg);
+  const d=await jiraFetch(`search/jql?jql=${jql}&maxResults=100&fields=summary,project`,cfg);
   return d.issues||[];
 }
 
