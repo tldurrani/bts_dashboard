@@ -181,6 +181,17 @@ td{padding:10px 12px;vertical-align:top;color:var(--text);}
 .tbl-ticket-input{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:2px 6px;font-size:11px;font-family:var(--mono);width:90px;margin-top:3px;}
 .tbl-ticket-input:focus{outline:none;border-color:var(--accent);}
 .tbl-ticket-input::placeholder{color:var(--text3);}
+.tk-search-wrap{position:relative;margin-top:3px;}
+.tk-dropdown{position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;z-index:200;max-height:180px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.3);display:none;}
+.tk-dropdown.open{display:block;}
+.tk-dropdown-item{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);}
+.tk-dropdown-item:last-child{border-bottom:none;}
+.tk-dropdown-item:hover{background:var(--bg3);}
+.tk-dropdown-key{font-family:var(--mono);font-size:11px;color:var(--accent);flex-shrink:0;min-width:70px;}
+.tk-dropdown-summary{color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+.tk-dropdown-status{font-size:10px;color:var(--text3);flex-shrink:0;}
+.tk-dropdown-empty{padding:10px;font-size:12px;color:var(--text3);text-align:center;}
+.tk-searching{padding:10px;font-size:12px;color:var(--text3);text-align:center;}
 
 /* jira tab */
 .jira-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px 20px;margin-bottom:14px;}
@@ -735,17 +746,98 @@ window.addTicketToRow=async function(rowId){
 };
 
 const ticketPlaceholder='ENG-123';
+let tkSearchTimers={};
+
+window.ticketSearch=async function(rowId, val){
+  const dd=document.getElementById('tbl-tk-dd-'+rowId);
+  if(!dd) return;
+  const q=(val||'').trim();
+
+  // if it looks like a bare key (e.g. ENG-123) just show an add option
+  if(!q){ dd.classList.remove('open'); return; }
+
+  // debounce
+  clearTimeout(tkSearchTimers[rowId]);
+  tkSearchTimers[rowId]=setTimeout(async()=>{
+    dd.innerHTML='<div class="tk-searching">Searching…</div>';
+    dd.classList.add('open');
+
+    try{
+      let issues=[];
+      if(jiraCfg){
+        // search by text OR by key
+        const jql = q.match(/^[A-Z]+-\d+$/i)
+          ? `key=${q.toUpperCase()}`
+          : `text ~ "${q}*" AND statusCategory != Done ORDER BY updated DESC`;
+        const data=await jiraFetch(`search/jql?jql=${encodeURIComponent(jql)}&maxResults=10&fields=summary,status,assignee`);
+        issues=data.issues||[];
+      }
+
+      if(!issues.length){
+        // still allow manual entry
+        dd.innerHTML=`<div class="tk-dropdown-item" onclick="addTicketFromTable('${rowId}','${q}');closeTkDropdown('${rowId}')">
+          <span class="tk-dropdown-key">${esc(q.toUpperCase())}</span>
+          <span class="tk-dropdown-summary" style="color:var(--text3);">Add manually</span>
+        </div>`;
+      } else {
+        dd.innerHTML=issues.map(i=>`
+          <div class="tk-dropdown-item" onclick="addTicketFromTable('${rowId}','${i.key}');closeTkDropdown('${rowId}')">
+            <span class="tk-dropdown-key">${i.key}</span>
+            <span class="tk-dropdown-summary" title="${esc(i.fields?.summary||'')}">${esc(i.fields?.summary||'')}</span>
+            <span class="tk-dropdown-status">${esc(i.fields?.status?.name||'')}</span>
+          </div>`).join('')+
+          `<div class="tk-dropdown-item" style="border-top:1px solid var(--border2);" onclick="addTicketFromTable('${rowId}','${q}');closeTkDropdown('${rowId}')">
+            <span class="tk-dropdown-key" style="color:var(--text3)">manual</span>
+            <span class="tk-dropdown-summary" style="color:var(--text3);">Add "${q.toUpperCase()}" as typed</span>
+          </div>`;
+      }
+    }catch(e){
+      // fallback to manual add
+      dd.innerHTML=`<div class="tk-dropdown-item" onclick="addTicketFromTable('${rowId}','${q}');closeTkDropdown('${rowId}')">
+        <span class="tk-dropdown-key">${esc(q.toUpperCase())}</span>
+        <span class="tk-dropdown-summary" style="color:var(--text3);">Add manually (Jira unavailable)</span>
+      </div>`;
+    }
+  }, 350);
+};
+
+window.closeTkDropdown=function(rowId){
+  const dd=document.getElementById('tbl-tk-dd-'+rowId);
+  const inp=document.getElementById('tbl-tk-inp-'+rowId);
+  if(dd) dd.classList.remove('open');
+  if(inp) inp.value='';
+};
+
+window.tkInputKey=function(event,rowId){
+  event.stopPropagation();
+  if(event.key==='Escape') closeTkDropdown(rowId);
+  if(event.key==='Enter'){
+    const val=document.getElementById('tbl-tk-inp-'+rowId)?.value||'';
+    if(val.trim()){ addTicketFromTable(rowId,val); closeTkDropdown(rowId); }
+  }
+};
+
+// close dropdowns when clicking outside
+document.addEventListener('click',()=>{
+  document.querySelectorAll('.tk-dropdown.open').forEach(d=>d.classList.remove('open'));
+});
 
 window.addTicketFromTable=async function(rowId, rawVal){
   if(!rawVal||!rawVal.trim()) return;
-  // strip URL to bare key
+  // strip URL to bare key — handle full URLs, /browse/ paths, query strings
   let v = rawVal.trim();
-  if(v.includes('://') || v.includes('/browse/')){
-    const parts = v.split('/').filter(Boolean);
-    v = parts[parts.length-1] || v;
-  }
-  const key = v.toUpperCase().split('?')[0].split('#')[0].trim();
-  if(!key) return;
+  try{
+    if(v.startsWith('http')){
+      const u = new URL(v);
+      const parts = u.pathname.split('/').filter(Boolean);
+      const browseIdx = parts.indexOf('browse');
+      v = browseIdx>=0 ? parts[browseIdx+1] : parts[parts.length-1];
+    } else if(v.includes('/browse/')){
+      v = v.split('/browse/')[1].split('?')[0].split('#')[0];
+    }
+  }catch(e){}
+  const key = (v||'').toUpperCase().split('?')[0].split('#')[0].trim();
+  if(!key||!key.match(/[A-Z]+-\d+/)) return;
 
   const row=rows.find(r=>r.id===rowId);
   if(!row) return;
@@ -1033,9 +1125,13 @@ function renderDetailed(){
               <button class="tbl-ticket-del" onclick="event.stopPropagation();removeTicket('${r.id}','${t.key}')" title="Remove">✕</button>
             </div>`).join('')}
         </div>
-        <input class="tbl-ticket-input" id="tbl-tk-inp-${r.id}" placeholder="ENG-123"
-          onclick="event.stopPropagation()"
-          onkeydown="if(event.key==='Enter'){event.stopPropagation();addTicketFromTable('${r.id}',this.value);this.value='';}"/>
+        <div class="tk-search-wrap" onclick="event.stopPropagation()">
+          <input class="tbl-ticket-input" id="tbl-tk-inp-${r.id}" placeholder="Search or paste key…"
+            autocomplete="off"
+            oninput="ticketSearch('${r.id}',this.value)"
+            onkeydown="tkInputKey(event,'${r.id}')"/>
+          <div class="tk-dropdown" id="tbl-tk-dd-${r.id}"></div>
+        </div>
       </td>
       <td><button class="del-btn" onclick="deleteRow('${r.id}')">✕</button></td>`:`
       <td>${esc(r.activity)}</td>
