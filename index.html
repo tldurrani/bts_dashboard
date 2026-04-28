@@ -555,7 +555,13 @@ async function loadRows(){
   else{ rows=snap.docs.map(d=>({tickets:[],...d.data(),id:d.id})); rows.sort((a,b)=>a.order-b.order); }
   applyDashConfig(); render(); stampSaved('Loaded from Firestore');
 }
-async function saveAll(){ for(const r of rows) await setDoc(doc(db,'workstreams',r.id),r); stampSaved('Saved to Firestore'); }
+async function saveAll(){
+  for(const r of rows){
+    try{ await setDoc(doc(db,'workstreams',r.id),r); }
+    catch(e){ console.error('saveAll row error:',r.id,e); throw e; }
+  }
+  stampSaved('Saved to Firestore');
+}
 async function saveDashConfig(){ if(db) await setDoc(doc(db,'config','dashboard'),dashConfig); }
 async function deleteRowById(id){ rows=rows.filter(r=>r.id!==id); if(db) await deleteDoc(doc(db,'workstreams',id)); render(); stampSaved('Row deleted'); }
 window.deleteRow=deleteRowById;
@@ -1050,24 +1056,50 @@ window.cancelChanges=function(){
 };
 
 window.saveChanges=async function(){
+  // collect all edits from the table DOM
   document.querySelectorAll('#tbl-body tr[data-id]').forEach(tr=>{
     const row=rows.find(r=>r.id===tr.dataset.id); if(!row) return;
-    row.workstream=tr.querySelector('[data-f="workstream"]')?.value||row.workstream;
-    // update badge based on workstream
     const wsBadgeMap={'Engineering':'badge-eng','Product':'badge-prod','Marketing':'badge-mkt','CX':'badge-cx','Operations':'badge-ops'};
-    row.wsBadge=wsBadgeMap[row.workstream]||'badge-prod';
-    row.activity=tr.querySelector('[data-f="activity"]')?.value||row.activity;
-    row.owner=tr.querySelector('[data-f="owner"]')?.value||row.owner;
-    const dlVal=tr.querySelector('[data-f="deadline"]')?.value;
-    row.deadline=dlVal?isoToDeadline(dlVal):row.deadline;
-    row.status=tr.querySelector('[data-f="status"]')?.value||row.status;
-    row.risk=tr.querySelector('[data-f="risk"]')?.value||row.risk;
-    row.progress=parseInt(tr.querySelector('[data-f="progress"]')?.value)||0;
-    row.path=tr.querySelector('[data-f="path"]')?.value||row.path;
-    row.next=tr.querySelector('[data-f="next"]')?.value||row.next;
+    const ws=tr.querySelector('[data-f="workstream"]')?.value; if(ws){ row.workstream=ws; row.wsBadge=wsBadgeMap[ws]||'badge-prod'; }
+    const act=tr.querySelector('[data-f="activity"]')?.value; if(act!==undefined) row.activity=act;
+    const own=tr.querySelector('[data-f="owner"]')?.value; if(own!==undefined) row.owner=own;
+    const dlVal=tr.querySelector('[data-f="deadline"]')?.value; if(dlVal) row.deadline=isoToDeadline(dlVal);
+    const st=tr.querySelector('[data-f="status"]')?.value; if(st) row.status=st;
+    const rk=tr.querySelector('[data-f="risk"]')?.value; if(rk) row.risk=rk;
+    const pr=tr.querySelector('[data-f="progress"]')?.value; if(pr!==undefined) row.progress=parseInt(pr)||0;
+    const pa=tr.querySelector('[data-f="path"]')?.value; if(pa!==undefined) row.path=pa;
+    const nx=tr.querySelector('[data-f="next"]')?.value; if(nx!==undefined) row.next=nx;
   });
-  pendingRows=null;
-  await saveAll(); updateMetrics(); render();
+
+  // show saving state
+  const saveBtn=document.querySelector('.edit-banner-btns .btn-primary');
+  if(saveBtn){ saveBtn.textContent='Saving…'; saveBtn.disabled=true; }
+
+  try{
+    // save each row individually so one failure doesn't block others
+    let saved=0, failed=0;
+    for(const r of rows){
+      try{
+        await setDoc(doc(db,'workstreams',r.id), r);
+        saved++;
+      }catch(e){
+        console.error('Failed to save row',r.id,e);
+        failed++;
+      }
+    }
+    pendingRows=null;
+    if(failed>0){
+      stampSaved(`⚠ ${saved} saved, ${failed} failed — check Firestore rules`);
+    } else {
+      stampSaved('All changes saved');
+    }
+    updateMetrics();
+    render();
+  }catch(e){
+    console.error('saveChanges error:',e);
+    if(saveBtn){ saveBtn.textContent='Save changes'; saveBtn.disabled=false; }
+    alert('Save failed: '+e.message+'\n\nCheck Firestore rules allow writes to the bts-dashboard database.');
+  }
 };
 
 window.setSort=function(col){
