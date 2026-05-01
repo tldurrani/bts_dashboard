@@ -173,6 +173,7 @@ td{padding:10px 12px;vertical-align:top;color:var(--text);}
 .status-pill{display:inline-block;border-radius:6px;padding:3px 8px;font-size:12px;}
 .status-select{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-family:var(--font);cursor:pointer;}
 .g{border-color:var(--green-border)!important;color:var(--green)!important;background:var(--green-bg)!important;}
+.ns{border-color:var(--border2)!important;color:var(--text2)!important;background:var(--bg3)!important;}
 .y{border-color:var(--yellow-border)!important;color:var(--yellow)!important;background:var(--yellow-bg)!important;}
 .r{border-color:var(--red-border)!important;color:var(--red)!important;background:var(--red-bg)!important;}
 .editable{background:transparent;border:1px solid transparent;border-radius:4px;padding:3px 6px;font-size:13px;color:var(--text);font-family:var(--font);width:100%;resize:none;}
@@ -467,6 +468,7 @@ input[type="date"]::-webkit-outer-spin-button{
     <div class="mc"><div class="mc-label">On track</div><div class="mc-val g" id="m-g">—</div></div>
     <div class="mc"><div class="mc-label">At risk</div><div class="mc-val y" id="m-y">—</div></div>
     <div class="mc"><div class="mc-label">Blocked</div><div class="mc-val r" id="m-r">—</div></div>
+    <div class="mc"><div class="mc-label">Not started</div><div class="mc-val" id="m-ns" style="color:var(--text2)">—</div></div>
     <div class="mc"><div class="mc-label">Jira tickets</div><div class="mc-val b" id="m-tickets">—</div><div class="mc-sub">linked</div></div>
   </div>
 
@@ -1348,8 +1350,8 @@ function initDrag(){
 window.showDetail=function(id){
   const row=rows.find(r=>r.id===id); if(!row) return;
   const el=document.getElementById('detail-drawer'); if(!el) return;
-  const sc={green:'var(--green)',yellow:'var(--yellow)',red:'var(--red)'};
-  const sl={green:'On track',yellow:'At risk',red:'Blocked'};
+  const sc={green:'var(--green)',yellow:'var(--yellow)',red:'var(--red)','not-started':'var(--text3)'};
+  const sl={green:'On track',yellow:'At risk',red:'Blocked','not-started':'Not started'};
   const sdot={green:'#4a9660',yellow:'#c49a3c',red:'#b85c5c',indeterminate:'#888780',done:'#4a9660',new:'#5a6170'};
   const tickets=row.tickets||[];
   const tcards=tickets.length
@@ -1364,7 +1366,7 @@ window.showDetail=function(id){
       <div><div class="df-label">End date</div><div class="df-val" style="font-family:var(--mono)">${esc(row.deadline)}</div></div>
       <div><div class="df-label">Status</div><div class="df-val" style="color:${sc[row.status]};font-weight:500;">${sl[row.status]}</div></div>
       <div><div class="df-label">Progress</div><div class="df-val">${row.progress}%</div></div>
-      <div class="df-full"><div class="df-label">Risk</div><div class="df-val" style="color:var(--text2)">${esc(row.risk)||'—'}</div></div>
+      <div class="df-full"><div class="df-label">Risk/Dependency</div><div class="df-val" style="color:var(--text2)">${esc(row.risk)||'—'}</div></div>
       <div class="df-full"><div class="df-label">Path to green</div><div class="df-val">${esc(row.path)||'—'}</div></div>
       <div class="df-full"><div class="df-label">Next steps</div><div class="df-val">${esc(row.next)||'—'}</div></div>
     </div>
@@ -1381,7 +1383,7 @@ function daysOut(){  return Math.max(0,Math.ceil((getBTSDate()-new Date())/(1000
 function stampSaved(msg){ const n=new Date(); document.getElementById('last-saved').textContent=(msg||'Saved')+' · '+n.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' at '+n.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); }
 function updateTopbar(){ const w=weeksOut(),c=document.getElementById('weeks-chip'); c.textContent=w+' weeks out'; c.classList.toggle('urgent',w<=8); document.getElementById('date-chip').textContent=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
 function updateMetrics(){
-  const g=rows.filter(r=>r.status==='green').length, y=rows.filter(r=>r.status==='yellow').length, r2=rows.filter(r=>r.status==='red').length;
+  const g=rows.filter(r=>r.status==='green').length, y=rows.filter(r=>r.status==='yellow').length, r2=rows.filter(r=>r.status==='red').length, ns=rows.filter(r=>r.status==='not-started').length;
   const avg=rows.length?Math.round(rows.reduce((a,r)=>a+r.progress,0)/rows.length):0;
   const tc=rows.reduce((a,r)=>a+(r.tickets||[]).length,0);
   document.getElementById('m-days').textContent=daysOut();
@@ -1390,6 +1392,7 @@ function updateMetrics(){
   document.getElementById('m-g').textContent=g;
   document.getElementById('m-y').textContent=y;
   document.getElementById('m-r').textContent=r2;
+  const nsEl=document.getElementById('m-ns'); if(nsEl) nsEl.textContent=ns;
   document.getElementById('m-tickets').textContent=tc;
 }
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -1457,7 +1460,7 @@ function buildSwimlane(){
   const pct=d=>Math.max(0,Math.min(100,(d-START)/SPAN*100));
   const MONTHS=[{l:'Jan',m:0},{l:'Feb',m:1},{l:'Mar',m:2},{l:'Apr',m:3},{l:'May',m:4},{l:'Jun',m:5},{l:'Jul',m:6},{l:'Aug',m:7}];
   const mHtml=MONTHS.map(x=>{ const s=pct(new Date(YEAR,x.m,1)),e=Math.min(100,pct(new Date(YEAR,x.m+1,1))),w=e-s; return w>0?`<div class="sl-month" style="width:${w}%">${x.l}</div>`:''; }).join('');
-  const sc={green:'var(--green)',yellow:'var(--yellow)',red:'var(--red)'};
+  const sc={green:'var(--green)',yellow:'var(--yellow)',red:'var(--red)','not-started':'var(--text3)'};
   const pdl=dl=>{
     if(!dl||!dl.includes(' ')) return new Date(YEAR,7,1);
     const mo={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
@@ -1592,7 +1595,7 @@ function getFilteredSortedRows(){
 }
 
 function renderDetailed(){
-  const sc={green:'g',yellow:'y',red:'r'}, sl={green:'On track',yellow:'At risk',red:'Blocked'};
+  const sc={green:'g',yellow:'y',red:'r','not-started':'ns'}, sl={green:'On track',yellow:'At risk',red:'Blocked','not-started':'Not started'};
   const displayRows=getFilteredSortedRows();
 
   function thSort(col,label){
@@ -1614,6 +1617,7 @@ function renderDetailed(){
       </div>
       <select class="th-filter" onchange="setColFilter('status',this.value)" onclick="event.stopPropagation()" style="width:100%;">
         <option value="">All</option>
+        <option value="not-started" ${colFilters.status==='not-started'?'selected':''}>Not started</option>
         <option value="green" ${colFilters.status==='green'?'selected':''}>On track</option>
         <option value="yellow" ${colFilters.status==='yellow'?'selected':''}>At risk</option>
         <option value="red" ${colFilters.status==='red'?'selected':''}>Blocked</option>
@@ -1637,12 +1641,13 @@ function renderDetailed(){
       <td><input class="editable" data-f="owner" value="${esc(r.owner)}"/></td>
       <td><input class="editable" data-f="startDate" type="date" value="${deadlineToISO(r.startDate||'')}" /></td>
       <td><input class="editable" data-f="deadline" type="date" value="${deadlineToISO(r.deadline)}" /></td>
-      <td><select class="status-select ${sc[r.status]}" data-f="status" onchange="this.className='status-select '+{green:'g',yellow:'y',red:'r'}[this.value]">
+      <td><select class="status-select ${sc[r.status]||'ns'}" data-f="status" onchange="this.className='status-select '+({green:'g',yellow:'y',red:'r','not-started':'ns'}[this.value]||'ns')">
+        <option value="not-started" ${r.status==='not-started'?'selected':''}>Not started</option>
         <option value="green" ${r.status==='green'?'selected':''}>On track</option>
         <option value="yellow" ${r.status==='yellow'?'selected':''}>At risk</option>
         <option value="red" ${r.status==='red'?'selected':''}>Blocked</option>
       </select></td>
-      <td><textarea class="editable" data-f="risk" rows="2" placeholder="Describe risk…">${esc(r.risk||'')}</textarea></td>
+      <td><textarea class="editable" data-f="risk" rows="2" placeholder="Describe risk or dependency…">${esc(r.risk||'')}</textarea></td>
       <td><input class="progress-input" data-f="progress" type="number" min="0" max="100" value="${r.progress}"/>%</td>
       <td><textarea class="editable" data-f="path" rows="2">${esc(r.path)}</textarea></td>
       <td><textarea class="editable" data-f="next" rows="2">${esc(r.next)}</textarea></td>
@@ -1664,7 +1669,7 @@ function renderDetailed(){
       <td>${esc(r.owner)}</td>
       <td style="font-family:var(--mono);font-size:12px;white-space:nowrap;color:var(--text2);">${esc(r.startDate||'—')}</td>
       <td style="font-family:var(--mono);font-size:12px;white-space:nowrap;">${esc(r.deadline)}</td>
-      <td><span class="status-pill ${sc[r.status]}">${sl[r.status]}</span></td>
+      <td><span class="status-pill ${sc[r.status]||'ns'}">${sl[r.status]||'Not started'}</span></td>
       <td style="color:var(--text2);font-size:12px;">${esc(r.risk||'—')}</td>
       <td style="font-family:var(--mono)">${r.progress}%</td>
       <td style="color:var(--text2);font-size:12px;">${esc(r.path)}</td>
@@ -1677,7 +1682,7 @@ function renderDetailed(){
 
     // build child rows
     const childRows=children.map(c=>{
-      const csc={green:'g',yellow:'y',red:'r'}, csl={green:'On track',yellow:'At risk',red:'Blocked'};
+      const csc={green:'g',yellow:'y',red:'r','not-started':'ns'}, csl={green:'On track',yellow:'At risk',red:'Blocked','not-started':'Not started'};
       const ctks=c.tickets||[];
       const childCells=isAdmin?`
         <td></td>
@@ -1686,7 +1691,8 @@ function renderDetailed(){
         <td><input class="editable" style="font-size:12px;" value="${esc(c.owner)}" onblur="saveChildField('${r.id}','${c.id}','owner',this.value)"/></td>
         <td><input class="editable" type="date" value="${deadlineToISO(c.startDate||'')}"  onchange="saveChildField('${r.id}','${c.id}','startDate',this.value)"/></td>
         <td><input class="editable" type="date" value="${deadlineToISO(c.deadline)}"  onchange="saveChildField('${r.id}','${c.id}','deadline',this.value)"/></td>
-        <td><select class="status-select ${csc[c.status]}" onchange="this.className='status-select '+{green:'g',yellow:'y',red:'r'}[this.value];saveChildField('${r.id}','${c.id}','status',this.value)">
+        <td><select class="status-select ${csc[c.status]||'ns'}" onchange="this.className='status-select '+({green:'g',yellow:'y',red:'r','not-started':'ns'}[this.value]||'ns');saveChildField('${r.id}','${c.id}','status',this.value)">
+          <option value="not-started" ${c.status==='not-started'?'selected':''}>Not started</option>
           <option value="green" ${c.status==='green'?'selected':''}>On track</option>
           <option value="yellow" ${c.status==='yellow'?'selected':''}>At risk</option>
           <option value="red" ${c.status==='red'?'selected':''}>Blocked</option>
@@ -1767,7 +1773,7 @@ function renderDetailed(){
         ${thSort('owner','Owner')}
         ${thSort('startDate','Start date')}${thSort('deadline','End date')}
         ${thStatusFilter()}
-        <th>Risk</th>
+        <th>Risk/Dependency</th>
         <th><div class="th-wrap" onclick="setSort('progress')" style="cursor:pointer;user-select:none;"><span>%</span><span style="font-size:10px;color:${sortCol==='progress'?'var(--accent)':'var(--text3)'};">${sortCol==='progress'?(sortDir==='asc'?'↑':'↓'):'↕'}</span></div></th>
         <th>Path to green</th>
         <th>Next steps</th>
