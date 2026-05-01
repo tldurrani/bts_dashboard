@@ -144,7 +144,23 @@ html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var
 
 /* detailed table */
 .tbl-wrap{overflow-x:auto;}
-table{width:100%;border-collapse:collapse;font-size:13px;}
+table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}
+table th, table td{overflow:hidden;text-overflow:ellipsis;}
+table th:nth-child(1){width:32px;}   /* expand/drag */
+table th:nth-child(2){width:110px;}  /* workstream */
+table th:nth-child(3){width:180px;}  /* activity */
+table th:nth-child(4){width:100px;}  /* owner */
+table th:nth-child(5){width:110px;}  /* start date */
+table th:nth-child(6){width:110px;}  /* end date */
+table th:nth-child(7){width:110px;}  /* status */
+table th:nth-child(8){min-width:140px;width:160px;}  /* risk - free text needs room */
+table th:nth-child(9){width:50px;}   /* % */
+table th:nth-child(10){width:160px;} /* path to green */
+table th:nth-child(11){width:150px;} /* next steps */
+table th:nth-child(12){width:140px;} /* jira */
+table th:nth-child(13){width:32px;}  /* delete */
+textarea.editable{width:100%;min-width:0;}
+input.editable{width:100%;min-width:0;}
 thead tr{border-bottom:1px solid var(--border2);}
 th{padding:8px 12px;font-size:10px;font-weight:500;color:var(--text3);text-align:left;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;}
 tbody tr{border-bottom:1px solid var(--border);}
@@ -303,6 +319,33 @@ tr.drag-over td{border-top:2px solid var(--accent)!important;}
 .add-child-btn{background:none;border:1px dashed var(--border2);color:var(--text3);border-radius:4px;font-size:11px;padding:2px 8px;cursor:pointer;font-family:var(--font);margin-top:3px;display:inline-block;}
 .add-child-btn:hover{color:var(--accent);border-color:var(--accent-border);}
 .child-count{font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:4px;}
+
+
+/* date input fix */
+input[type="date"]{
+  appearance:none;
+  -webkit-appearance:none;
+  background:var(--bg3);
+  border:1px solid var(--border2);
+  color:var(--text);
+  border-radius:4px;
+  padding:3px 6px;
+  font-size:12px;
+  font-family:var(--font);
+  width:120px;
+  cursor:pointer;
+}
+input[type="date"]:focus{outline:none;border-color:var(--accent);}
+input[type="date"]::-webkit-calendar-picker-indicator{
+  filter:invert(0.6);
+  cursor:pointer;
+  opacity:0.6;
+}
+input[type="date"]::-webkit-inner-spin-button,
+input[type="date"]::-webkit-outer-spin-button{
+  -webkit-appearance:none;
+  display:none;
+}
 
 .loading{display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px;gap:10px;}
 .spinner{width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
@@ -1519,8 +1562,8 @@ function renderDetailed(){
       </td>
       <td><input class="editable" data-f="activity" value="${esc(r.activity)}"/></td>
       <td><input class="editable" data-f="owner" value="${esc(r.owner)}"/></td>
-      <td><input class="editable" data-f="startDate" type="date" value="${deadlineToISO(r.startDate||'')}" style="width:130px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 6px;font-size:12px;font-family:var(--font);"/></td>
-      <td><input class="editable" data-f="deadline" type="date" value="${deadlineToISO(r.deadline)}" style="width:130px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 6px;font-size:12px;font-family:var(--font);"/></td>
+      <td><input class="editable" data-f="startDate" type="date" value="${deadlineToISO(r.startDate||'')}" /></td>
+      <td><input class="editable" data-f="deadline" type="date" value="${deadlineToISO(r.deadline)}" /></td>
       <td><select class="status-select ${sc[r.status]}" data-f="status" onchange="this.className='status-select '+{green:'g',yellow:'y',red:'r'}[this.value]">
         <option value="green" ${r.status==='green'?'selected':''}>On track</option>
         <option value="yellow" ${r.status==='yellow'?'selected':''}>At risk</option>
@@ -1568,8 +1611,8 @@ function renderDetailed(){
         <td></td>
         <td class="child-indent"><input class="editable" style="font-size:12px;" value="${esc(c.activity)}" onblur="saveChildField('${r.id}','${c.id}','activity',this.value)"/></td>
         <td><input class="editable" style="font-size:12px;" value="${esc(c.owner)}" onblur="saveChildField('${r.id}','${c.id}','owner',this.value)"/></td>
-        <td><input class="editable" type="date" value="${deadlineToISO(c.startDate||'')}" style="width:120px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:2px 5px;font-size:11px;" onchange="saveChildField('${r.id}','${c.id}','startDate',this.value)"/></td>
-        <td><input class="editable" type="date" value="${deadlineToISO(c.deadline)}" style="width:120px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:2px 5px;font-size:11px;" onchange="saveChildField('${r.id}','${c.id}','deadline',this.value)"/></td>
+        <td><input class="editable" type="date" value="${deadlineToISO(c.startDate||'')}"  onchange="saveChildField('${r.id}','${c.id}','startDate',this.value)"/></td>
+        <td><input class="editable" type="date" value="${deadlineToISO(c.deadline)}"  onchange="saveChildField('${r.id}','${c.id}','deadline',this.value)"/></td>
         <td><select class="status-select ${csc[c.status]}" onchange="this.className='status-select '+{green:'g',yellow:'y',red:'r'}[this.value];saveChildField('${r.id}','${c.id}','status',this.value)">
           <option value="green" ${c.status==='green'?'selected':''}>On track</option>
           <option value="yellow" ${c.status==='yellow'?'selected':''}>At risk</option>
