@@ -553,12 +553,17 @@ function applyDashConfig(){
 
 
 function deadlineToISO(dl){
-  // convert "Jul 11" or "Aug 1" to "2026-07-11"
+  // convert "Jul 11" or "Aug 1" to ISO date, inferring year from BTS date context
   const mo={Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
-  if(!dl||!dl.includes(' ')) return '';
-  const [m,d]=dl.split(' ');
+  if(!dl) return '';
+  // already ISO format
+  if(dl.match(/^\d{4}-\d{2}-\d{2}$/)) return dl;
+  if(!dl.includes(' ')) return '';
+  const [m,d]=dl.trim().split(' ');
   const mon=mo[m]; if(!mon) return '';
-  return `2026-${mon}-${d.padStart(2,'0')}`;
+  // infer year from BTS date
+  const btsYear=getBTSDate().getFullYear();
+  return `${btsYear}-${mon}-${d.padStart(2,'0')}`;
 }
 
 function isoToDeadline(iso){
@@ -1228,8 +1233,10 @@ window.saveChanges=async function(){
     const ws=tr.querySelector('[data-f="workstream"]')?.value; if(ws){ row.workstream=ws; row.wsBadge=wsBadgeMap[ws]||'badge-prod'; }
     const act=tr.querySelector('[data-f="activity"]')?.value; if(act!==undefined) row.activity=act;
     const own=tr.querySelector('[data-f="owner"]')?.value; if(own!==undefined) row.owner=own;
-    const sdVal=tr.querySelector('[data-f="startDate"]')?.value; if(sdVal) row.startDate=isoToDeadline(sdVal);
-    const dlVal=tr.querySelector('[data-f="deadline"]')?.value; if(dlVal) row.deadline=isoToDeadline(dlVal);
+    const sdVal=tr.querySelector('[data-f="startDate"]')?.value;
+    if(sdVal!==undefined) row.startDate=sdVal?isoToDeadline(sdVal):'';
+    const dlVal=tr.querySelector('[data-f="deadline"]')?.value;
+    if(dlVal!==undefined) row.deadline=dlVal?isoToDeadline(dlVal):row.deadline;
     const st=tr.querySelector('[data-f="status"]')?.value; if(st) row.status=st;
     const rk=tr.querySelector('[data-f="risk"]')?.value; if(rk) row.risk=rk;
     const pr=tr.querySelector('[data-f="progress"]')?.value; if(pr!==undefined) row.progress=parseInt(pr)||0;
