@@ -460,14 +460,14 @@ function getBTSDate(){ const d=new Date((dashConfig.btsDate||BTS_DATE_STR)+'T00:
 const JIRA_BASE      = "https://riversidejira.atlassian.net";
 
 const SEED = [
-  {id:'ws-01',order:1,workstream:'Engineering',wsBadge:'badge-eng',activity:'Performance optimization & bug fixes',owner:'Eng Lead',deadline:'Jul 11',status:'yellow',progress:45,path:'Complete perf audit; resolve top 3 P1s',next:'Kick off perf audit sprint Mon',tickets:[],risk:'medium'},
-  {id:'ws-02',order:2,workstream:'Engineering',wsBadge:'badge-eng',activity:'Load testing — staging',owner:'QA / Eng',deadline:'Jul 18',status:'red',progress:15,path:'Stand up staging load-test pipeline; define pass thresholds',next:'Schedule infra review with DevOps this week',tickets:[],risk:'critical'},
-  {id:'ws-03',order:3,workstream:'Engineering',wsBadge:'badge-eng',activity:'Load testing — production',owner:'Eng Lead',deadline:'Jul 25',status:'red',progress:10,path:'Run full-scale test after staging passes',next:'Depends on staging test completion',tickets:[],risk:'critical'},
-  {id:'ws-04',order:4,workstream:'Engineering',wsBadge:'badge-eng',activity:'SSO & rostering (Clever, ClassLink, Google, Microsoft)',owner:'Platform PM',deadline:'Jul 18',status:'yellow',progress:55,path:'Complete cert renewals; validate all four IDP flows',next:'Audit expiry dates on Clever & ClassLink certs',tickets:[],risk:'high'},
-  {id:'ws-05',order:5,workstream:'Product',wsBadge:'badge-prod',activity:'New apps / features launch-ready',owner:'Product PM',deadline:'Jul 25',status:'yellow',progress:60,path:'Complete UAT; resolve blocking bugs',next:'Finalize UAT checklist by EOW',tickets:[],risk:'medium'},
-  {id:'ws-06',order:6,workstream:'Marketing',wsBadge:'badge-mkt',activity:'GTM activities (launch content, comms, campaigns)',owner:'Marketing Lead',deadline:'Aug 1',status:'green',progress:85,path:'On track — comms calendar locked',next:'Send final BTS email sequence Aug 1',tickets:[],risk:'low'},
-  {id:'ws-07',order:7,workstream:'CX',wsBadge:'badge-cx',activity:'Internal training — CX & support readiness',owner:'CX Manager',deadline:'Jul 25',status:'yellow',progress:40,path:'Deliver training sessions; update playbooks & FAQs',next:'Schedule training dates; draft agenda',tickets:[],risk:'medium'},
-  {id:'ws-08',order:8,workstream:'Operations',wsBadge:'badge-ops',activity:'Ops / infrastructure scale-up',owner:'DevOps Lead',deadline:'Jul 18',status:'green',progress:80,path:'Auto-scaling policies reviewed; on track',next:'Confirm capacity reservation with cloud provider',tickets:[],risk:'low'},
+  {id:'ws-01',order:1,workstream:'Engineering',wsBadge:'badge-eng',activity:'Performance optimization & bug fixes',owner:'Eng Lead',startDate:'Jun 2',deadline:'Jul 11',status:'yellow',progress:45,path:'Complete perf audit; resolve top 3 P1s',next:'Kick off perf audit sprint Mon',tickets:[],risk:'medium'},
+  {id:'ws-02',order:2,workstream:'Engineering',wsBadge:'badge-eng',activity:'Load testing — staging',owner:'QA / Eng',startDate:'Jun 9',deadline:'Jul 18',status:'red',progress:15,path:'Stand up staging load-test pipeline; define pass thresholds',next:'Schedule infra review with DevOps this week',tickets:[],risk:'critical'},
+  {id:'ws-03',order:3,workstream:'Engineering',wsBadge:'badge-eng',activity:'Load testing — production',owner:'Eng Lead',startDate:'Jun 16',deadline:'Jul 25',status:'red',progress:10,path:'Run full-scale test after staging passes',next:'Depends on staging test completion',tickets:[],risk:'critical'},
+  {id:'ws-04',order:4,workstream:'Engineering',wsBadge:'badge-eng',activity:'SSO & rostering (Clever, ClassLink, Google, Microsoft)',owner:'Platform PM',startDate:'Jun 9',deadline:'Jul 18',status:'yellow',progress:55,path:'Complete cert renewals; validate all four IDP flows',next:'Audit expiry dates on Clever & ClassLink certs',tickets:[],risk:'high'},
+  {id:'ws-05',order:5,workstream:'Product',wsBadge:'badge-prod',activity:'New apps / features launch-ready',owner:'Product PM',startDate:'Jun 16',deadline:'Jul 25',status:'yellow',progress:60,path:'Complete UAT; resolve blocking bugs',next:'Finalize UAT checklist by EOW',tickets:[],risk:'medium'},
+  {id:'ws-06',order:6,workstream:'Marketing',wsBadge:'badge-mkt',activity:'GTM activities (launch content, comms, campaigns)',owner:'Marketing Lead',startDate:'Jun 23',deadline:'Aug 1',status:'green',progress:85,path:'On track — comms calendar locked',next:'Send final BTS email sequence Aug 1',tickets:[],risk:'low'},
+  {id:'ws-07',order:7,workstream:'CX',wsBadge:'badge-cx',activity:'Internal training — CX & support readiness',owner:'CX Manager',startDate:'Jun 16',deadline:'Jul 25',status:'yellow',progress:40,path:'Deliver training sessions; update playbooks & FAQs',next:'Schedule training dates; draft agenda',tickets:[],risk:'medium'},
+  {id:'ws-08',order:8,workstream:'Operations',wsBadge:'badge-ops',activity:'Ops / infrastructure scale-up',owner:'DevOps Lead',startDate:'Jun 9',deadline:'Jul 18',status:'green',progress:80,path:'Auto-scaling policies reviewed; on track',next:'Confirm capacity reservation with cloud provider',tickets:[],risk:'low'},
 ];
 
 let rows=[], isAdmin=false, activeView='highlevel', jiraCfg=null, app, db;
@@ -1170,7 +1170,7 @@ window.toggleAdminMode=function(){
 };
 window.closeOverlay=id=>document.getElementById(id).style.display='none';
 window.switchView=function(view,btn){ activeView=view; document.querySelectorAll('.vt-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); render(); };
-window.addRow=function(){ rows.push({id:'ws-'+Date.now(),order:rows.length+1,workstream:'New',wsBadge:'badge-prod',activity:'New activity',owner:'TBD',deadline:'Aug 1',status:'yellow',progress:0,path:'',next:'',tickets:[],risk:'',children:[]}); render(); };
+window.addRow=function(){ rows.push({id:'ws-'+Date.now(),order:rows.length+1,workstream:'New',wsBadge:'badge-prod',activity:'New activity',owner:'TBD',startDate:'',deadline:'Aug 1',status:'yellow',progress:0,path:'',next:'',tickets:[],risk:'',children:[]}); render(); };
 // snapshot rows before editing starts
 function snapshotRows(){ pendingRows=JSON.parse(JSON.stringify(rows)); }
 
@@ -1187,6 +1187,7 @@ window.saveChanges=async function(){
     const ws=tr.querySelector('[data-f="workstream"]')?.value; if(ws){ row.workstream=ws; row.wsBadge=wsBadgeMap[ws]||'badge-prod'; }
     const act=tr.querySelector('[data-f="activity"]')?.value; if(act!==undefined) row.activity=act;
     const own=tr.querySelector('[data-f="owner"]')?.value; if(own!==undefined) row.owner=own;
+    const sdVal=tr.querySelector('[data-f="startDate"]')?.value; if(sdVal) row.startDate=isoToDeadline(sdVal);
     const dlVal=tr.querySelector('[data-f="deadline"]')?.value; if(dlVal) row.deadline=isoToDeadline(dlVal);
     const st=tr.querySelector('[data-f="status"]')?.value; if(st) row.status=st;
     const rk=tr.querySelector('[data-f="risk"]')?.value; if(rk) row.risk=rk;
@@ -1293,7 +1294,8 @@ window.showDetail=function(id){
     <div class="detail-body">
       <div><div class="df-label">Workstream</div><div class="df-val">${esc(row.workstream)}</div></div>
       <div><div class="df-label">Owner</div><div class="df-val">${esc(row.owner)}</div></div>
-      <div><div class="df-label">Deadline</div><div class="df-val" style="font-family:var(--mono)">${esc(row.deadline)}</div></div>
+      <div><div class="df-label">Start date</div><div class="df-val" style="font-family:var(--mono)">${esc(row.startDate||'—')}</div></div>
+      <div><div class="df-label">End date</div><div class="df-val" style="font-family:var(--mono)">${esc(row.deadline)}</div></div>
       <div><div class="df-label">Status</div><div class="df-val" style="color:${sc[row.status]};font-weight:500;">${sl[row.status]}</div></div>
       <div><div class="df-label">Progress</div><div class="df-val">${row.progress}%</div></div>
       <div class="df-full"><div class="df-label">Risk</div><div class="df-val" style="color:var(--text2)">${esc(row.risk)||'—'}</div></div>
@@ -1403,7 +1405,8 @@ function buildSwimlane(){
       </div>
       <div class="sl-track" data-pct="${r.progress}" onmouseenter="showBarTip(event,this.dataset.pct+'% complete')" onmousemove="moveBarTip(event)" onmouseleave="hideBarTip()">
         <div class="sl-track-bg"></div>
-        <div class="sl-track-fill" style="width:${r.progress}%;background:${color};"></div>
+        <div class="sl-track-fill" style="left:${Math.max(0,pct(pdl(r.startDate||'Jan 1')))}%;width:${Math.max(0,Math.min(pct(pdl(r.deadline))-Math.max(0,pct(pdl(r.startDate||'Jan 1'))),100-Math.max(0,pct(pdl(r.startDate||'Jan 1')))))*r.progress/100}%;background:${color};opacity:0.9;border-radius:2px;"></div>
+        <div class="sl-track-range" style="position:absolute;top:50%;transform:translateY(-50%);left:${Math.max(0,pct(pdl(r.startDate||'Jan 1')))}%;width:${Math.max(0,pct(pdl(r.deadline))-Math.max(0,pct(pdl(r.startDate||'Jan 1'))))}%;height:4px;background:${color};opacity:0.2;border-radius:2px;"></div>
         ${i===0?`<div class="sl-today" style="left:${tp}%"><div class="sl-today-lbl" style="left:${tp<60?'4px':'-40px'}">today</div></div>`:`<div class="sl-today" style="left:${tp}%"></div>`}
         <div class="sl-milestone" style="left:${dp}%;background:${color};"><div class="sl-dl-lbl">${r.deadline}</div></div>
         <div class="sl-pct">${r.progress}%</div>
@@ -1516,6 +1519,7 @@ function renderDetailed(){
       </td>
       <td><input class="editable" data-f="activity" value="${esc(r.activity)}"/></td>
       <td><input class="editable" data-f="owner" value="${esc(r.owner)}"/></td>
+      <td><input class="editable" data-f="startDate" type="date" value="${deadlineToISO(r.startDate||'')}" style="width:130px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 6px;font-size:12px;font-family:var(--font);"/></td>
       <td><input class="editable" data-f="deadline" type="date" value="${deadlineToISO(r.deadline)}" style="width:130px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 6px;font-size:12px;font-family:var(--font);"/></td>
       <td><select class="status-select ${sc[r.status]}" data-f="status" onchange="this.className='status-select '+{green:'g',yellow:'y',red:'r'}[this.value]">
         <option value="green" ${r.status==='green'?'selected':''}>On track</option>
@@ -1542,6 +1546,7 @@ function renderDetailed(){
       <td><span class="ws-badge ${r.wsBadge}">${esc(r.workstream)}</span></td>
       <td>${esc(r.activity)}</td>
       <td>${esc(r.owner)}</td>
+      <td style="font-family:var(--mono);font-size:12px;white-space:nowrap;color:var(--text2);">${esc(r.startDate||'—')}</td>
       <td style="font-family:var(--mono);font-size:12px;white-space:nowrap;">${esc(r.deadline)}</td>
       <td><span class="status-pill ${sc[r.status]}">${sl[r.status]}</span></td>
       <td style="color:var(--text2);font-size:12px;">${esc(r.risk||'—')}</td>
@@ -1563,6 +1568,7 @@ function renderDetailed(){
         <td></td>
         <td class="child-indent"><input class="editable" style="font-size:12px;" value="${esc(c.activity)}" onblur="saveChildField('${r.id}','${c.id}','activity',this.value)"/></td>
         <td><input class="editable" style="font-size:12px;" value="${esc(c.owner)}" onblur="saveChildField('${r.id}','${c.id}','owner',this.value)"/></td>
+        <td><input class="editable" type="date" value="${deadlineToISO(c.startDate||'')}" style="width:120px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:2px 5px;font-size:11px;" onchange="saveChildField('${r.id}','${c.id}','startDate',this.value)"/></td>
         <td><input class="editable" type="date" value="${deadlineToISO(c.deadline)}" style="width:120px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:2px 5px;font-size:11px;" onchange="saveChildField('${r.id}','${c.id}','deadline',this.value)"/></td>
         <td><select class="status-select ${csc[c.status]}" onchange="this.className='status-select '+{green:'g',yellow:'y',red:'r'}[this.value];saveChildField('${r.id}','${c.id}','status',this.value)">
           <option value="green" ${c.status==='green'?'selected':''}>On track</option>
@@ -1589,6 +1595,7 @@ function renderDetailed(){
         <td></td>
         <td class="child-indent" style="font-size:12px;color:var(--text2);">${esc(c.activity)}</td>
         <td style="font-size:12px;color:var(--text2);">${esc(c.owner)}</td>
+        <td style="font-size:12px;color:var(--text2);white-space:nowrap;">${esc(c.startDate||'—')}</td>
         <td style="font-size:12px;color:var(--text2);white-space:nowrap;">${esc(c.deadline)}</td>
         <td><span class="status-pill ${csc[c.status]}">${csl[c.status]}</span></td>
         <td style="font-size:12px;color:var(--text2);">${esc(c.risk||'—')}</td>
@@ -1635,7 +1642,7 @@ function renderDetailed(){
         ${thSort('workstream','Workstream')}
         ${thSort('activity','Activity')}
         ${thSort('owner','Owner')}
-        ${thSort('deadline','Deadline')}
+        ${thSort('startDate','Start date')}${thSort('deadline','End date')}
         ${thStatusFilter()}
         <th>Risk</th>
         <th><div class="th-wrap" onclick="setSort('progress')" style="cursor:pointer;user-select:none;"><span>%</span><span style="font-size:10px;color:${sortCol==='progress'?'var(--accent)':'var(--text3)'};">${sortCol==='progress'?(sortDir==='asc'?'↑':'↓'):'↕'}</span></div></th>
