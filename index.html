@@ -144,23 +144,21 @@ html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var
 
 /* detailed table */
 .tbl-wrap{overflow-x:auto;}
-table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}
-table th, table td{overflow:hidden;text-overflow:ellipsis;}
-table th:nth-child(1){width:32px;}   /* expand/drag */
-table th:nth-child(2){width:110px;}  /* workstream */
-table th:nth-child(3){width:180px;}  /* activity */
-table th:nth-child(4){width:100px;}  /* owner */
-table th:nth-child(5){width:110px;}  /* start date */
-table th:nth-child(6){width:110px;}  /* end date */
-table th:nth-child(7){width:110px;}  /* status */
-table th:nth-child(8){min-width:140px;width:160px;}  /* risk - free text needs room */
-table th:nth-child(9){width:50px;}   /* % */
-table th:nth-child(10){width:160px;} /* path to green */
-table th:nth-child(11){width:150px;} /* next steps */
-table th:nth-child(12){width:140px;} /* jira */
-table th:nth-child(13){width:32px;}  /* delete */
-textarea.editable{width:100%;min-width:0;}
-input.editable{width:100%;min-width:0;}
+table{width:max-content;min-width:100%;border-collapse:collapse;font-size:13px;}
+.col-expand{width:32px;}
+.col-ws{width:110px;}
+.col-activity{width:180px;}
+.col-owner{width:100px;}
+.col-date{width:115px;}
+.col-status{width:120px;}
+.col-risk{width:160px;}
+.col-pct{width:55px;}
+.col-text{width:160px;}
+.col-jira{width:140px;}
+.col-del{width:32px;}
+textarea.editable{width:100%;min-width:0;box-sizing:border-box;}
+input.editable{width:100%;min-width:0;box-sizing:border-box;}
+input[type="number"].progress-input{width:46px;}
 thead tr{border-bottom:1px solid var(--border2);}
 th{padding:8px 12px;font-size:10px;font-weight:500;color:var(--text3);text-align:left;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;}
 tbody tr{border-bottom:1px solid var(--border);}
@@ -1680,6 +1678,13 @@ function renderDetailed(){
       </div>
     </div>`:''}
     <div class="tbl-wrap"><table>
+      <colgroup>
+        <col class="col-expand"/><col class="col-ws"/><col class="col-activity"/>
+        <col class="col-owner"/><col class="col-date"/><col class="col-date"/>
+        <col class="col-status"/><col class="col-risk"/><col class="col-pct"/>
+        <col class="col-text"/><col class="col-text"/><col class="col-jira"/>
+        <col class="col-del"/>
+      </colgroup>
       <thead><tr>
         <th style="width:24px;"></th>
         ${thSort('workstream','Workstream')}
