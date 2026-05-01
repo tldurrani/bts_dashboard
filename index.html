@@ -289,6 +289,21 @@ tr.drag-over td{border-top:2px solid var(--accent)!important;}
 .ws-input{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 6px;font-size:12px;font-family:var(--font);width:100%;}
 .ws-input:focus{outline:none;border-color:var(--accent);}
 
+
+/* parent/child table rows */
+.tr-parent td:first-child{padding-left:4px;}
+.tr-expand-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;border-radius:3px;transition:transform .15s;line-height:1;flex-shrink:0;}
+.tr-expand-btn:hover{color:var(--text);background:var(--bg3);}
+.tr-expand-btn.open{transform:rotate(90deg);}
+.tr-child{display:none;}
+.tr-child.visible{display:table-row;}
+.tr-child td{background:var(--bg2);border-left:3px solid var(--accent-border)!important;}
+.tr-child td:first-child{border-left:3px solid var(--accent-border)!important;}
+.child-indent{padding-left:28px!important;}
+.add-child-btn{background:none;border:1px dashed var(--border2);color:var(--text3);border-radius:4px;font-size:11px;padding:2px 8px;cursor:pointer;font-family:var(--font);margin-top:3px;display:inline-block;}
+.add-child-btn:hover{color:var(--accent);border-color:var(--accent-border);}
+.child-count{font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:4px;}
+
 .loading{display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px;gap:10px;}
 .spinner{width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -456,6 +471,7 @@ const SEED = [
 ];
 
 let rows=[], isAdmin=false, activeView='highlevel', jiraCfg=null, app, db;
+let expandedRows=new Set(); // track which parent rows are expanded
 let sortCol=null, sortDir='asc';
 let colFilters={status:''};
 let pendingRows=null; // snapshot for cancel
@@ -528,6 +544,114 @@ window.moveBarTip=function(e){
 window.hideBarTip=function(){
   const t=document.getElementById('bar-tooltip');
   if(t){ t.style.display='none'; t.textContent=''; }
+};
+
+
+window.toggleExpand=function(id){
+  const btn=document.getElementById('expand-btn-'+id);
+  if(expandedRows.has(id)){
+    expandedRows.delete(id);
+    if(btn) btn.classList.remove('open');
+    document.querySelectorAll(`.tr-child[data-parent="${id}"]`).forEach(tr=>tr.classList.remove('visible'));
+  } else {
+    expandedRows.add(id);
+    if(btn) btn.classList.add('open');
+    document.querySelectorAll(`.tr-child[data-parent="${id}"]`).forEach(tr=>tr.classList.add('visible'));
+  }
+};
+
+window.addChild=function(parentId){
+  const parent=rows.find(r=>r.id===parentId); if(!parent) return;
+  if(!parent.children) parent.children=[];
+  const child={
+    id:'ch-'+Date.now(),
+    activity:'New sub-activity',
+    owner:parent.owner||'TBD',
+    deadline:parent.deadline||'Aug 1',
+    status:'yellow',
+    risk:'',
+    progress:0,
+    path:'',
+    next:'',
+    tickets:[]
+  };
+  parent.children.push(child);
+  // auto-expand parent
+  expandedRows.add(parentId);
+  renderDetailed();
+};
+
+window.removeChild=async function(parentId, childId){
+  const parent=rows.find(r=>r.id===parentId); if(!parent) return;
+  parent.children=(parent.children||[]).filter(c=>c.id!==childId);
+  try{ if(db) await setDoc(doc(db,'workstreams',parentId),parent); }catch(e){ console.error(e); }
+  renderDetailed();
+};
+
+window.saveChildField=function(parentId, childId, field, value){
+  const parent=rows.find(r=>r.id===parentId); if(!parent) return;
+  const child=(parent.children||[]).find(c=>c.id===childId); if(!child) return;
+  if(field==='deadline') child[field]=isoToDeadline(value)||value;
+  else if(field==='progress') child[field]=parseInt(value)||0;
+  else child[field]=value;
+};
+
+
+window.removeChildTicket=async function(parentId,childId,key){
+  const parent=rows.find(r=>r.id===parentId); if(!parent) return;
+  const child=(parent.children||[]).find(c=>c.id===childId); if(!child) return;
+  child.tickets=(child.tickets||[]).filter(t=>t.key!==key);
+  try{ if(db) await setDoc(doc(db,'workstreams',parentId),parent); }catch(e){ console.error(e); }
+  const wrap=document.getElementById('tbl-tks-'+childId);
+  if(wrap) [...wrap.querySelectorAll('.tbl-ticket-item')].forEach(el=>{ if(el.querySelector('a')?.textContent===key) el.remove(); });
+};
+
+window.ticketSearchChild=async function(parentId,childId,val){
+  const dd=document.getElementById('tbl-tk-dd-'+childId); if(!dd) return;
+  const q=(val||'').trim();
+  if(!q){ dd.classList.remove('open'); return; }
+  clearTimeout(tkSearchTimers[childId]);
+  tkSearchTimers[childId]=setTimeout(async()=>{
+    dd.innerHTML='<div class="tk-searching">Searching…</div>';
+    dd.classList.add('open');
+    try{
+      let issues=[];
+      if(jiraCfg){
+        const jql=q.match(/^[A-Z]+-\d+$/i)?`key=${q.toUpperCase()}`:`text ~ "${q}*" AND statusCategory != Done ORDER BY updated DESC`;
+        const data=await jiraFetch(`search/jql?jql=${encodeURIComponent(jql)}&maxResults=10&fields=summary,status`);
+        issues=data.issues||[];
+      }
+      dd.innerHTML=(issues.length?issues.map(i=>`<div class="tk-dropdown-item" onclick="addChildTicket('${parentId}','${childId}','${i.key}');closeTkDropdown('${childId}')"><span class="tk-dropdown-key">${i.key}</span><span class="tk-dropdown-summary">${esc(i.fields?.summary||'')}</span><span class="tk-dropdown-status">${esc(i.fields?.status?.name||'')}</span></div>`).join(''):'')
+        +`<div class="tk-dropdown-item" onclick="addChildTicket('${parentId}','${childId}','${q}');closeTkDropdown('${childId}')"><span class="tk-dropdown-key" style="color:var(--text3)">manual</span><span class="tk-dropdown-summary" style="color:var(--text3);">Add "${q.toUpperCase()}"</span></div>`;
+    }catch(e){
+      dd.innerHTML=`<div class="tk-dropdown-item" onclick="addChildTicket('${parentId}','${childId}','${q}');closeTkDropdown('${childId}')"><span class="tk-dropdown-key">${esc(q.toUpperCase())}</span><span class="tk-dropdown-summary" style="color:var(--text3);">Add manually</span></div>`;
+    }
+  },350);
+};
+
+window.tkInputKeyChild=function(event,parentId,childId){
+  event.stopPropagation();
+  if(event.key==='Escape') closeTkDropdown(childId);
+  if(event.key==='Enter'){
+    const val=document.getElementById('tbl-tk-inp-'+childId)?.value||'';
+    if(val.trim()){ addChildTicket(parentId,childId,val); closeTkDropdown(childId); }
+  }
+};
+
+window.addChildTicket=async function(parentId,childId,rawVal){
+  let v=(rawVal||'').trim();
+  try{ if(v.startsWith('http')){ const u=new URL(v); const pts=u.pathname.split('/').filter(Boolean); const bi=pts.indexOf('browse'); v=bi>=0?pts[bi+1]:pts[pts.length-1]; } }catch(e){}
+  const key=v.toUpperCase().split('?')[0].split('#')[0].trim();
+  if(!key||!key.match(/[A-Z]+-\d+/)) return;
+  const parent=rows.find(r=>r.id===parentId); if(!parent) return;
+  const child=(parent.children||[]).find(c=>c.id===childId); if(!child) return;
+  if((child.tickets||[]).find(t=>t.key===key)) return;
+  let ticket={key,summary:'',status:'',statusCategory:'',assignee:'',priority:'',url:`${JIRA_BASE}/browse/${key}`};
+  if(jiraCfg){ try{ const d=await jiraFetch(`issue/${key}?fields=summary,status,assignee,priority`); ticket={key,summary:d.fields?.summary||'',status:d.fields?.status?.name||'',statusCategory:d.fields?.status?.statusCategory?.key||'',assignee:d.fields?.assignee?.displayName||'Unassigned',priority:d.fields?.priority?.name||'',url:`${JIRA_BASE}/browse/${key}`}; }catch(e){} }
+  child.tickets=[...(child.tickets||[]),ticket];
+  try{ if(db) await setDoc(doc(db,'workstreams',parentId),parent); }catch(e){ console.error(e); }
+  const wrap=document.getElementById('tbl-tks-'+childId);
+  if(wrap){ const item=document.createElement('div'); item.className='tbl-ticket-item'; item.innerHTML=`<a href="${ticket.url}" target="_blank">${ticket.key}</a><button class="tbl-ticket-del" onclick="removeChildTicket('${parentId}','${childId}','${ticket.key}')">✕</button>`; wrap.appendChild(item); }
 };
 
 async function init(){
@@ -1046,7 +1170,7 @@ window.toggleAdminMode=function(){
 };
 window.closeOverlay=id=>document.getElementById(id).style.display='none';
 window.switchView=function(view,btn){ activeView=view; document.querySelectorAll('.vt-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); render(); };
-window.addRow=function(){ rows.push({id:'ws-'+Date.now(),order:rows.length+1,workstream:'New',wsBadge:'badge-prod',activity:'New activity',owner:'TBD',deadline:'Aug 1',status:'yellow',progress:0,path:'',next:'',tickets:[],risk:'medium'}); render(); };
+window.addRow=function(){ rows.push({id:'ws-'+Date.now(),order:rows.length+1,workstream:'New',wsBadge:'badge-prod',activity:'New activity',owner:'TBD',deadline:'Aug 1',status:'yellow',progress:0,path:'',next:'',tickets:[],risk:'',children:[]}); render(); };
 // snapshot rows before editing starts
 function snapshotRows(){ pendingRows=JSON.parse(JSON.stringify(rows)); }
 
@@ -1070,6 +1194,8 @@ window.saveChanges=async function(){
     const pa=tr.querySelector('[data-f="path"]')?.value; if(pa!==undefined) row.path=pa;
     const nx=tr.querySelector('[data-f="next"]')?.value; if(nx!==undefined) row.next=nx;
   });
+  // children are saved on blur via saveChildField - but persist all to Firestore here too
+  // children state is already in rows[] via saveChildField
 
   // show saving state
   const saveBtn=document.querySelector('.edit-banner-btns .btn-primary');
@@ -1379,7 +1505,10 @@ function renderDetailed(){
   const tbody=displayRows.map(r=>{
     const tks=(r.tickets||[]);
     const cells=isAdmin?`
-      <td style="cursor:grab;text-align:center;color:var(--text3);font-size:16px;" class="drag-handle" draggable="false">⠿</td>
+      <td style="text-align:center;white-space:nowrap;">
+        <button id="expand-btn-${r.id}" class="tr-expand-btn${expandedRows.has(r.id)?' open':''}" onclick="event.stopPropagation();toggleExpand('${r.id}')" title="Expand/collapse children">▶</button>
+        <span class="child-count">${(r.children||[]).length>0?'('+r.children.length+')':''}</span>
+      </td>
       <td>
         <select class="ws-input" data-f="workstream" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 6px;font-size:12px;font-family:var(--font);">
           ${['Engineering','Product','Marketing','CX','Operations',...new Set(rows.map(r=>r.workstream))].filter((v,i,a)=>a.indexOf(v)===i).map(w=>`<option value="${esc(w)}" ${r.workstream===w?'selected':''}>${esc(w)}</option>`).join('')}
@@ -1407,7 +1536,9 @@ function renderDetailed(){
         </div>
       </td>
       <td><button class="del-btn" onclick="deleteRow('${r.id}')">✕</button></td>`:`
-      <td></td>
+      <td style="text-align:center;white-space:nowrap;">
+        ${(r.children||[]).length>0?`<button id="expand-btn-${r.id}" class="tr-expand-btn${expandedRows.has(r.id)?' open':''}" onclick="event.stopPropagation();toggleExpand('${r.id}')" title="Expand/collapse">▶</button><span class="child-count">(${r.children.length})</span>`:''}
+      </td>
       <td><span class="ws-badge ${r.wsBadge}">${esc(r.workstream)}</span></td>
       <td>${esc(r.activity)}</td>
       <td>${esc(r.owner)}</td>
@@ -1419,14 +1550,71 @@ function renderDetailed(){
       <td style="color:var(--text2);font-size:12px;">${esc(r.next)}</td>
       <td><div class="tbl-ticket-wrap">${tks.length?tks.map(t=>`<div class="tbl-ticket-item"><a href="${t.url}" target="_blank" onclick="event.stopPropagation()">${t.key}</a></div>`).join(''):'<span style="font-size:11px;color:var(--text3);">—</span>'}</div></td>
       <td></td>`;
-    return `<tr data-id="${r.id}" draggable="${isAdmin?'true':'false'}"
+    const children=(r.children||[]);
+    const hasChildren=children.length>0;
+    const isExpanded=expandedRows.has(r.id);
+
+    // build child rows
+    const childRows=children.map(c=>{
+      const csc={green:'g',yellow:'y',red:'r'}, csl={green:'On track',yellow:'At risk',red:'Blocked'};
+      const ctks=c.tickets||[];
+      const childCells=isAdmin?`
+        <td></td>
+        <td></td>
+        <td class="child-indent"><input class="editable" style="font-size:12px;" value="${esc(c.activity)}" onblur="saveChildField('${r.id}','${c.id}','activity',this.value)"/></td>
+        <td><input class="editable" style="font-size:12px;" value="${esc(c.owner)}" onblur="saveChildField('${r.id}','${c.id}','owner',this.value)"/></td>
+        <td><input class="editable" type="date" value="${deadlineToISO(c.deadline)}" style="width:120px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:2px 5px;font-size:11px;" onchange="saveChildField('${r.id}','${c.id}','deadline',this.value)"/></td>
+        <td><select class="status-select ${csc[c.status]}" onchange="this.className='status-select '+{green:'g',yellow:'y',red:'r'}[this.value];saveChildField('${r.id}','${c.id}','status',this.value)">
+          <option value="green" ${c.status==='green'?'selected':''}>On track</option>
+          <option value="yellow" ${c.status==='yellow'?'selected':''}>At risk</option>
+          <option value="red" ${c.status==='red'?'selected':''}>Blocked</option>
+        </select></td>
+        <td><textarea class="editable" rows="1" style="font-size:11px;" onblur="saveChildField('${r.id}','${c.id}','risk',this.value)">${esc(c.risk||'')}</textarea></td>
+        <td><input class="progress-input" type="number" min="0" max="100" value="${c.progress}" onblur="saveChildField('${r.id}','${c.id}','progress',this.value)"/>%</td>
+        <td><textarea class="editable" rows="1" style="font-size:11px;" onblur="saveChildField('${r.id}','${c.id}','path',this.value)">${esc(c.path||'')}</textarea></td>
+        <td><textarea class="editable" rows="1" style="font-size:11px;" onblur="saveChildField('${r.id}','${c.id}','next',this.value)">${esc(c.next||'')}</textarea></td>
+        <td>
+          <div class="tbl-ticket-wrap" id="tbl-tks-${c.id}">
+            ${ctks.map(t=>`<div class="tbl-ticket-item"><a href="${t.url}" target="_blank" onclick="event.stopPropagation()">${t.key}</a><button class="tbl-ticket-del" onclick="event.stopPropagation();removeChildTicket('${r.id}','${c.id}','${t.key}')" title="Remove">✕</button></div>`).join('')}
+          </div>
+          <div class="tk-search-wrap" onclick="event.stopPropagation()">
+            <input class="tbl-ticket-input" id="tbl-tk-inp-${c.id}" placeholder="Search or paste key…" autocomplete="off"
+              oninput="ticketSearchChild('${r.id}','${c.id}',this.value)"
+              onkeydown="tkInputKeyChild(event,'${r.id}','${c.id}')"/>
+            <div class="tk-dropdown" id="tbl-tk-dd-${c.id}"></div>
+          </div>
+        </td>
+        <td><button class="del-btn" onclick="removeChild('${r.id}','${c.id}')" title="Remove child">✕</button></td>`:`
+        <td></td>
+        <td></td>
+        <td class="child-indent" style="font-size:12px;color:var(--text2);">${esc(c.activity)}</td>
+        <td style="font-size:12px;color:var(--text2);">${esc(c.owner)}</td>
+        <td style="font-size:12px;color:var(--text2);white-space:nowrap;">${esc(c.deadline)}</td>
+        <td><span class="status-pill ${csc[c.status]}">${csl[c.status]}</span></td>
+        <td style="font-size:12px;color:var(--text2);">${esc(c.risk||'—')}</td>
+        <td style="font-size:12px;font-family:var(--mono);">${c.progress}%</td>
+        <td style="font-size:12px;color:var(--text2);">${esc(c.path||'—')}</td>
+        <td style="font-size:12px;color:var(--text2);">${esc(c.next||'—')}</td>
+        <td><div class="tbl-ticket-wrap">${ctks.map(t=>`<div class="tbl-ticket-item"><a href="${t.url}" target="_blank">${t.key}</a></div>`).join('')||'<span style="font-size:11px;color:var(--text3);">—</span>'}</div></td>
+        <td></td>`;
+      return `<tr class="tr-child${isExpanded?' visible':''}" data-parent="${r.id}" data-child-id="${c.id}">${childCells}</tr>`;
+    }).join('');
+
+    // add child button row
+    const addChildRow=isAdmin?`<tr class="tr-child${isExpanded?' visible':''}" data-parent="${r.id}">
+      <td colspan="12" style="padding:4px 4px 6px 48px;border-top:none;">
+        <button class="add-child-btn" onclick="addChild('${r.id}')">+ add child row</button>
+      </td>
+    </tr>`:'';
+
+    return `<tr class="tr-parent" data-id="${r.id}" draggable="${isAdmin?'true':'false'}"
       ondragstart="dragStart(event,'${r.id}')"
       ondragover="dragOver(event)"
       ondrop="dragDrop(event,'${r.id}')"
       ondragend="dragEnd(event)"
       ondragleave="dragLeave(event)">
       ${cells}
-    </tr>`;
+    </tr>${childRows}${addChildRow}`;
   }).join('');
 
   const hasFilters=Object.values(colFilters).some(v=>v);
