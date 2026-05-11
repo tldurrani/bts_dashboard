@@ -303,6 +303,8 @@ th.sorted{border-bottom:2px solid var(--accent)!important;}
 .drag-handle:active{cursor:grabbing;}
 tr.dragging{opacity:.4;}
 tr.drag-over td{border-top:2px solid var(--accent)!important;}
+tr.child-drag-over td{border-top:2px solid var(--accent);opacity:.7;}
+tr.child-dragging{opacity:.3;}
 .edit-banner{display:flex;align-items:center;justify-content:space-between;background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:6px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:var(--accent);}
 .edit-banner-btns{display:flex;gap:6px;}
 .ws-input{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 6px;font-size:12px;font-family:var(--font);width:100%;}
@@ -722,6 +724,70 @@ window.addChildTicket=async function(parentId,childId,rawVal){
   try{ if(db) await setDoc(doc(db,'workstreams',parentId),parent); }catch(e){ console.error(e); }
   const wrap=document.getElementById('tbl-tks-'+childId);
   if(wrap){ const item=document.createElement('div'); item.className='tbl-ticket-item'; item.innerHTML=`<a href="${ticket.url}" target="_blank">${ticket.key}</a><button class="tbl-ticket-del" onclick="removeChildTicket('${parentId}','${childId}','${ticket.key}')">✕</button>`; wrap.appendChild(item); }
+};
+
+
+/* ── CHILD DRAG AND DROP ── */
+window.childDragStart=function(e,parentId,childId){
+  dragChildParentId=parentId;
+  dragChildId=childId;
+  e.currentTarget.classList.add('child-dragging');
+  e.dataTransfer.effectAllowed='move';
+  e.stopPropagation(); // prevent parent row drag from firing
+};
+
+window.childDragOver=function(e){
+  e.preventDefault();
+  e.stopPropagation();
+  e.dataTransfer.dropEffect='move';
+  // only highlight if same parent
+  const tr=e.currentTarget;
+  if(tr.dataset.parent===dragChildParentId){
+    tr.classList.add('child-drag-over');
+  }
+};
+
+window.childDragLeave=function(e){
+  e.currentTarget.classList.remove('child-drag-over');
+};
+
+window.childDragEnd=function(e){
+  e.currentTarget.classList.remove('child-dragging');
+  document.querySelectorAll('.child-drag-over').forEach(el=>el.classList.remove('child-drag-over'));
+  dragChildId=null;
+  dragChildParentId=null;
+};
+
+window.childDragDrop=async function(e,targetParentId,targetChildId){
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.classList.remove('child-drag-over');
+
+  if(!dragChildId||!dragChildParentId) return;
+  if(dragChildParentId!==targetParentId) return; // only within same parent
+  if(dragChildId===targetChildId) return;
+
+  const parent=rows.find(r=>r.id===dragChildParentId);
+  if(!parent||!parent.children) return;
+
+  const fromIdx=parent.children.findIndex(c=>c.id===dragChildId);
+  const toIdx=parent.children.findIndex(c=>c.id===targetChildId);
+  if(fromIdx<0||toIdx<0) return;
+
+  const [moved]=parent.children.splice(fromIdx,1);
+  parent.children.splice(toIdx,0,moved);
+
+  // save immediately
+  try{ if(db) await setDoc(doc(db,'workstreams',dragChildParentId),parent); }
+  catch(e){ console.error('child reorder save failed:',e); }
+
+  dragChildId=null;
+  dragChildParentId=null;
+
+  // re-render both views
+  renderDetailed();
+  // if high level is showing, rebuild swimlane too
+  if(activeView==='highlevel') renderHighLevel();
 };
 
 async function init(){
@@ -1314,6 +1380,8 @@ window.setColFilter=function(col,val){
 
 /* ── DRAG AND DROP ── */
 let dragId=null;
+let dragChildId=null;
+let dragChildParentId=null;
 window.dragStart=function(e,id){
   dragId=id;
   e.currentTarget.classList.add('dragging');
@@ -1341,11 +1409,25 @@ window.dragDrop=function(e,targetId){
 };
 
 function initDrag(){
-  // make drag handle the actual drag trigger, not the whole row
+  // parent row drag handles
   document.querySelectorAll('.drag-handle').forEach(handle=>{
     handle.addEventListener('mousedown',()=>{
       const tr=handle.closest('tr');
       if(tr) tr.setAttribute('draggable','true');
+    });
+  });
+  // child row drag handles
+  document.querySelectorAll('.child-drag-handle').forEach(handle=>{
+    handle.addEventListener('mousedown',()=>{
+      const tr=handle.closest('tr');
+      if(tr) tr.setAttribute('draggable','true');
+    });
+    handle.addEventListener('mouseleave',()=>{
+      // only reset if not currently dragging
+      if(!dragChildId){
+        const tr=handle.closest('tr');
+        if(tr) tr.setAttribute('draggable','false');
+      }
     });
   });
 }
@@ -1689,7 +1771,7 @@ function renderDetailed(){
       const csc={green:'g',yellow:'y',red:'r','not-started':'ns'}, csl={green:'On track',yellow:'At risk',red:'Blocked','not-started':'Not started'};
       const ctks=c.tickets||[];
       const childCells=isAdmin?`
-        <td></td>
+        <td style="text-align:center;color:var(--text3);font-size:14px;cursor:grab;" class="child-drag-handle">⠿</td>
         <td></td>
         <td class="child-indent"><input class="editable" style="font-size:12px;" value="${esc(c.activity)}" onblur="saveChildField('${r.id}','${c.id}','activity',this.value)"/></td>
         <td><input class="editable" style="font-size:12px;" value="${esc(c.owner)}" onblur="saveChildField('${r.id}','${c.id}','owner',this.value)"/></td>
@@ -1730,7 +1812,13 @@ function renderDetailed(){
         <td style="font-size:12px;color:var(--text2);">${esc(c.next||'—')}</td>
         <td><div class="tbl-ticket-wrap">${ctks.map(t=>`<div class="tbl-ticket-item"><a href="${t.url}" target="_blank">${t.key}</a></div>`).join('')||'<span style="font-size:11px;color:var(--text3);">—</span>'}</div></td>
         <td></td>`;
-      return `<tr class="tr-child${isExpanded?' visible':''}" data-parent="${r.id}" data-child-id="${c.id}">${childCells}</tr>`;
+      return `<tr class="tr-child${isExpanded?' visible':''}" data-parent="${r.id}" data-child-id="${c.id}"
+        draggable="false"
+        ondragstart="childDragStart(event,'${r.id}','${c.id}')"
+        ondragover="childDragOver(event)"
+        ondrop="childDragDrop(event,'${r.id}','${c.id}')"
+        ondragend="childDragEnd(event)"
+        ondragleave="childDragLeave(event)">${childCells}</tr>`;
     }).join('');
 
     // add child button row
