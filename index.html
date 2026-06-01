@@ -654,10 +654,15 @@ window.addChild=function(parentId){
 };
 
 window.removeChild=async function(parentId, childId){
-  const parent=rows.find(r=>r.id===parentId); if(!parent) return;
+  const parent=rows.find(r=>r.id===parentId);
+  if(!parent) return;
   parent.children=(parent.children||[]).filter(c=>c.id!==childId);
-  try{ if(db) await setDoc(doc(db,'workstreams',parentId),parent); }catch(e){ console.error(e); }
+  try{
+    if(db) await setDoc(doc(db,'workstreams',parentId),parent);
+    stampSaved('Child row removed');
+  }catch(e){ console.error('removeChild save error:',e); }
   renderDetailed();
+  if(activeView==='highlevel') renderHighLevel();
 };
 
 window.saveChildField=function(parentId, childId, field, value){
@@ -1739,7 +1744,7 @@ function renderDetailed(){
       <td><textarea class="editable" data-f="next" rows="2">${esc(r.next)}</textarea></td>
       <td>
         <div class="tbl-ticket-wrap" id="tbl-tks-${r.id}">
-          ${tks.map(t=>`<div class="tbl-ticket-item"><a href="${t.url}" target="_blank" onclick="event.stopPropagation()">${t.key}</a><button class="tbl-ticket-del" onclick="event.stopPropagation();removeTicket('${r.id}','${t.key}')" title="Remove">✕</button></div>`).join('')}
+          ${tks.map(t=>`<div class="tbl-ticket-item"><a href="${t.url}" target="_blank" onclick="event.stopPropagation()">${t.key}</a><button class="tbl-ticket-del" data-row="${r.id}" data-key="${t.key}" onclick="event.stopPropagation();removeTicket(this.dataset.row,this.dataset.key)" title="Remove">✕</button></div>`).join('')}
         </div>
         <div class="tk-search-wrap" onclick="event.stopPropagation()">
           <input class="tbl-ticket-input" id="tbl-tk-inp-${r.id}" placeholder="Search or paste key…" autocomplete="off" oninput="ticketSearch('${r.id}',this.value)" onkeydown="tkInputKey(event,'${r.id}')"/>
@@ -1789,7 +1794,7 @@ function renderDetailed(){
         <td><textarea class="editable" rows="1" style="font-size:11px;" onblur="saveChildField('${r.id}','${c.id}','next',this.value)">${esc(c.next||'')}</textarea></td>
         <td>
           <div class="tbl-ticket-wrap" id="tbl-tks-${c.id}">
-            ${ctks.map(t=>`<div class="tbl-ticket-item"><a href="${t.url}" target="_blank" onclick="event.stopPropagation()">${t.key}</a><button class="tbl-ticket-del" onclick="event.stopPropagation();removeChildTicket('${r.id}','${c.id}','${t.key}')" title="Remove">✕</button></div>`).join('')}
+            ${ctks.map(t=>`<div class="tbl-ticket-item"><a href="${t.url}" target="_blank" onclick="event.stopPropagation()">${t.key}</a><button class="tbl-ticket-del" data-parent="${r.id}" data-child="${c.id}" data-key="${t.key}" onclick="event.stopPropagation();removeChildTicket(this.dataset.parent,this.dataset.child,this.dataset.key)" title="Remove">✕</button></div>`).join('')}
           </div>
           <div class="tk-search-wrap" onclick="event.stopPropagation()">
             <input class="tbl-ticket-input" id="tbl-tk-inp-${c.id}" placeholder="Search or paste key…" autocomplete="off"
@@ -1798,7 +1803,7 @@ function renderDetailed(){
             <div class="tk-dropdown" id="tbl-tk-dd-${c.id}"></div>
           </div>
         </td>
-        <td><button class="del-btn" onclick="removeChild('${r.id}','${c.id}')" title="Remove child">✕</button></td>`:`
+        <td><button class="del-btn" data-parent-id="${r.id}" data-child-id="${c.id}" onclick="event.stopPropagation();removeChild(this.dataset.parentId,this.dataset.childId)" title="Remove child row">✕</button></td>`:`
         <td></td>
         <td></td>
         <td class="child-indent" style="font-size:12px;color:var(--text2);">${esc(c.activity)}</td>
