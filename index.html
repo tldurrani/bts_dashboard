@@ -653,14 +653,14 @@ window.addChild=function(parentId){
   renderDetailed();
 };
 
-window.removeChild=async function(parentId, childId){
+window.removeChildRow=async function(parentId, childId){
   const parent=rows.find(r=>r.id===parentId);
   if(!parent) return;
   parent.children=(parent.children||[]).filter(c=>c.id!==childId);
   try{
     if(db) await setDoc(doc(db,'workstreams',parentId),parent);
     stampSaved('Child row removed');
-  }catch(e){ console.error('removeChild save error:',e); }
+  }catch(e){ console.error('removeChildRow save error:',e); }
   renderDetailed();
   if(activeView==='highlevel') renderHighLevel();
 };
@@ -1803,7 +1803,7 @@ function renderDetailed(){
             <div class="tk-dropdown" id="tbl-tk-dd-${c.id}"></div>
           </div>
         </td>
-        <td><button class="del-btn" data-parent-id="${r.id}" data-child-id="${c.id}" onclick="event.stopPropagation();removeChild(this.dataset.parentId,this.dataset.childId)" title="Remove child row">✕</button></td>`:`
+        <td><button class="del-btn" data-parent-id="${r.id}" data-child-id="${c.id}" onclick="event.stopPropagation();removeChildRow(this.dataset.parentId,this.dataset.childId)" title="Remove child row">✕</button></td>`:`
         <td></td>
         <td></td>
         <td class="child-indent" style="font-size:12px;color:var(--text2);">${esc(c.activity)}</td>
